@@ -1,0 +1,224 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required, 1-100 chars)
+    //   - avatar: string (optional, URL)
+    //   - rating: number (optional)
+    //   - reviewCount: number (optional)
+    //   - location: string (optional)
+    //   - memberSince: string (optional)
+    //   - bio: string (optional, < 1000 chars)
+    //   - verified: bool (optional)
+    //   - role: string (required, ['Agent', 'Customer', 'Admin'])
+    //   - agencyName: string (optional)
+    //   - socials: map (optional)
+    //
+    // Collection: listings
+    // Document ID: listingId
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required, 1-200 chars)
+    //   - price: number (required, positive)
+    //   - currency: string (required)
+    //   - location: string (required)
+    //   - country: string (required, 2 chars)
+    //   - imageUrl: string (required, URL)
+    //   - images: list (optional, < 20 items)
+    //   - videos: list (optional, < 5 items)
+    //   - categoryId: string (required)
+    //   - subcategoryId: string (optional)
+    //   - isFeatured: bool (optional)
+    //   - isPremium: bool (optional)
+    //   - datePosted: string (required, ISO 8601)
+    //   - expiryDate: string (required, ISO 8601)
+    //   - sellerId: string (required, matches auth.uid)
+    //   - description: string (required, < 5000 chars)
+    //   - type: string (required, ['Rent', 'Sale'])
+    //   - propertyType: string (required)
+    //   - bedrooms: number (optional)
+    //   - bathrooms: number (optional)
+    //   - sqft: number (optional)
+    //   - amenities: list (optional)
+    //   - furnished: bool (optional)
+    //   - parking: bool (optional)
+    //   - security: bool (optional)
+    //   - petsAllowed: bool (optional)
+    //   - yearBuilt: number (optional)
+    //   - isVerified: bool (optional)
+    //   - virtualTourUrl: string (optional, URL)
+    //
+    // Collection: chats
+    // Document ID: chatId
+    // Fields:
+    //   - id: string (required)
+    //   - participants: list (required, contains auth.uid)
+    //   - listingId: string (optional)
+    //   - lastMessage: string (optional)
+    //   - lastMessageTime: string (optional)
+    //   - unreadCount: number (optional)
+    //
+    // Collection: chats/{chatId}/messages
+    // Document ID: messageId
+    // Fields:
+    //   - id: string (required)
+    //   - senderId: string (required, matches auth.uid)
+    //   - text: string (required, < 2000 chars)
+    //   - timestamp: string (required, ISO 8601)
+    //   - isRead: bool (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin' ||
+          (request.auth.token.email == "info@caliberdesk.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'name', 'role']) &&
+             data.id is string &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.role in ['Agent', 'Customer', 'Admin'] &&
+             (!('avatar' in data) || isValidUrl(data.avatar)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000));
+    }
+
+    function isValidListing(data) {
+      return data.keys().hasAll(['id', 'title', 'price', 'location', 'sellerId', 'type', 'propertyType', 'datePosted', 'expiryDate', 'description']) &&
+             data.id is string &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.price is number && data.price > 0 &&
+             data.location is string &&
+             data.sellerId == request.auth.uid &&
+             data.type in ['Rent', 'Sale'] &&
+             data.propertyType is string &&
+             isValidDateString(data.datePosted) &&
+             isValidDateString(data.expiryDate) &&
+             data.description is string && data.description.size() <= 5000 &&
+             (!('imageUrl' in data) || isValidUrl(data.imageUrl)) &&
+             (!('images' in data) || (data.images is list && data.images.size() <= 20)) &&
+             (!('videos' in data) || (data.videos is list && data.videos.size() <= 5));
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasAll(['id', 'participants']) &&
+             data.id is string &&
+             data.participants is list && data.participants.size() >= 1 &&
+             request.auth.uid in data.participants;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['id', 'senderId', 'text', 'timestamp']) &&
+             data.id is string &&
+             data.senderId == request.auth.uid &&
+             data.text is string && data.text.size() <= 2000 &&
+             isValidDateString(data.timestamp);
+    }
+
+    function isValidMonetization(data) {
+      return data.keys().hasAll(['id', 'type', 'title', 'link', 'active']) &&
+             data.id is string &&
+             data.type in ['banner', 'popup', 'card', 'tall'] &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             isValidUrl(data.link) &&
+             data.active is bool &&
+             (!('image' in data) || isValidUrl(data.image)) &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000));
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['id', 'vendorId', 'customerId', 'rating', 'createdAt']) &&
+             data.id is string &&
+             data.vendorId is string &&
+             data.customerId == request.auth.uid &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             isValidDateString(data.createdAt) &&
+             (!('comment' in data) || (data.comment is string && data.comment.size() <= 1000));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if true; // Public profiles
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role != 'Admin' || isAdmin());
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin())) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidListing(request.resource.data);
+      allow update: if (isAuthenticated() && resource.data.sellerId == request.auth.uid && isValidListing(request.resource.data)) || isAdmin();
+      allow delete: if (isAuthenticated() && resource.data.sellerId == request.auth.uid) || isAdmin();
+    }
+
+    match /chats/{chatId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow create: if isAuthenticated() && isValidChat(request.resource.data);
+      allow update: if isAuthenticated() && request.auth.uid in resource.data.participants && isValidChat(request.resource.data);
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow create: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants && isValidMessage(request.resource.data);
+        allow update: if false; // Messages are immutable
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /monetization/{adId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidMonetization(request.resource.data);
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidReview(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
