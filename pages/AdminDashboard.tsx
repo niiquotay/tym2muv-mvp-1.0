@@ -40,6 +40,7 @@ import {
   getAdminStats, 
   updateUserRole, 
   deleteListing,
+  updateListing,
   createMonetizationAd,
   updateMonetizationAd,
   deleteMonetizationAd
@@ -74,7 +75,7 @@ const AdminDashboard: React.FC = () => {
       const [statsData, usersData, listingsData, adsData] = await Promise.all([
         getAdminStats(),
         getAllUsers(),
-        getListings(),
+        getListings({ limit: 1000, isAdminQuery: true }),
         getMonetizationAds()
       ]);
       setStats(statsData);
@@ -131,6 +132,12 @@ const AdminDashboard: React.FC = () => {
       await deleteMonetizationAd(id);
       fetchData();
     }
+  };
+
+  const handleToggleListingStatus = async (id: string, currentStatus: string | undefined) => {
+    const newStatus = currentStatus === 'pending' ? 'active' : currentStatus === 'active' ? 'rejected' : 'active';
+    await updateListing(id, { status: newStatus });
+    fetchData();
   };
 
   const filteredUsers = users.filter(u => 
@@ -461,11 +468,26 @@ const AdminDashboard: React.FC = () => {
                       <span>{listing.type} • {listing.propertyType}</span>
                     </div>
                     <div className="flex justify-between items-center pt-4 border-t border-gray-50">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        <span className="text-xs text-gray-500">Active</span>
-                      </div>
-                      <button className="text-orange-600 text-sm font-bold flex items-center gap-1">
+                      <button 
+                        onClick={() => handleToggleListingStatus(listing.id, listing.status)}
+                        className={`flex items-center gap-2 px-2 py-1 rounded border transition-colors ${
+                          !listing.status || listing.status === 'active' 
+                          ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' 
+                          : listing.status === 'pending'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                          : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                        }`}
+                      >
+                        <div className={`w-2 h-2 rounded-full ${
+                          !listing.status || listing.status === 'active' ? 'bg-green-500' 
+                          : listing.status === 'pending' ? 'bg-amber-500' 
+                          : 'bg-red-500'
+                        }`}></div>
+                        <span className="text-xs font-bold uppercase tracking-wider">
+                          {!listing.status ? 'ACTIVE' : listing.status}
+                        </span>
+                      </button>
+                      <button className="text-orange-600 text-sm font-bold flex items-center gap-1 hover:underline">
                         View Details <ArrowRight size={14} />
                       </button>
                     </div>

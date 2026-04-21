@@ -43,6 +43,7 @@ export interface Listing {
   expiryDate: string;
   sellerId: string; // Link to a user (Agent)
   description: string;
+  status?: 'pending' | 'active' | 'rejected'; // Approval status
   
   // Real Estate Specific Fields
   type: ListingType;
@@ -75,9 +76,10 @@ export interface SearchFilters {
   limit?: number;
   countryCode?: string;
   sellerId?: string;
+  isAdminQuery?: boolean;
 }
 
-export type UserRole = 'Agent' | 'Customer' | 'Admin';
+export type UserRole = 'Agent' | 'Customer' | 'Admin' | 'Tenant';
 
 export interface User {
   id: string;
@@ -90,7 +92,7 @@ export interface User {
   bio: string;
   verified: boolean;
   role: UserRole;
-  agencyName?: string; // For Agents
+  savedListings?: string[]; // Array of saved listing IDs
   socials: {
     whatsapp?: string;
     facebook?: string;
@@ -101,6 +103,24 @@ export interface User {
     email?: string;
     website?: string;
   };
+}
+
+export interface Agent extends User {
+  agencyName?: string;
+  licenseNumber?: string;
+  specialization?: string[];
+}
+
+export interface Payment {
+  id: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  purpose: 'subscription' | 'promotion' | 'listing_fee';
+  referenceId?: string; // listingId or subscriptionId
+  createdAt: string;
+  gateway?: string;
 }
 
 export interface ChatMessage {

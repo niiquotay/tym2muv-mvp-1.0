@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getListingById, getUserProfile, getListings } from '../services/firebaseService';
+import { getListingById, getUserProfile, getListings, toggleSavedListing } from '../services/firebaseService';
+import { useAuth } from '../context/AuthContext';
 import { Listing, User } from '../types';
 import Icon from '../components/Icon';
 import AdCard from '../components/AdCard';
@@ -14,11 +15,13 @@ import { getSymbolFromCode } from '../services/location';
 const ListingDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user, login } = useAuth();
   const [listing, setListing] = useState<Listing | null>(null);
   const [seller, setSeller] = useState<User | null>(null);
   const [similarListings, setSimilarListings] = useState<Listing[]>([]);
   const [activeImage, setActiveImage] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaved, setIsSaved] = useState(false);
 
   // Safety States
   const [isSafetyOpen, setIsSafetyOpen] = useState(false);
@@ -26,6 +29,12 @@ const ListingDetails: React.FC = () => {
   const [isDeliveryRequested, setIsDeliveryRequested] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+
+  useEffect(() => {
+    if (user && id && user.savedListings) {
+      setIsSaved(user.savedListings.includes(id));
+    }
+  }, [user, id]);
 
   useEffect(() => {
     const fetchListingData = async () => {
@@ -116,6 +125,30 @@ const ListingDetails: React.FC = () => {
     triggerSafetyCheck(action);
   };
 
+  const handleToggleSave = async () => {
+    if (!user) {
+      navigate('/signin');
+      return;
+    }
+    if (!listing) return;
+    
+    // Optimistic UI update
+    const previousState = isSaved;
+    setIsSaved(!previousState);
+    
+    try {
+      const newSaved = await toggleSavedListing(user.id, listing.id, user.savedListings || []);
+      // If we had a mechanism to update the AuthContext's user directly, we would do it here.
+      // For now, it will sync next time auth state loads, or we can just rely on local state.
+      setToastMessage(previousState ? "Removed from saved" : "Saved to favorites");
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
+    } catch (e) {
+      // Revert on failure
+      setIsSaved(previousState);
+    }
+  };
+
   const handleRequestDelivery = () => {
     const action = () => {
       setIsDeliveryRequested(true);
@@ -141,8 +174,13 @@ const ListingDetails: React.FC = () => {
             <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
               <Icon name="share2" size={20} />
             </button>
-            <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
-              <Icon name="heart" size={20} />
+            <button 
+              onClick={handleToggleSave}
+              className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
+                isSaved ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'hover:bg-slate-100 text-slate-700'
+              }`}
+            >
+              <Icon name="heart" size={20} className={isSaved ? "fill-red-500" : ""} />
             </button>
           </div>
         </div>
@@ -250,7 +288,7 @@ const ListingDetails: React.FC = () => {
 
             {/* Seller Card (Agent Details) */}
             <div 
-              onClick={() => navigate(`/agent/${seller?.id}`)}
+              onClick={() => navigate(`/profile/${seller?.id}`)}
               className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-4 cursor-pointer hover:bg-slate-100 transition-all group"
             >
               <div className="flex items-center gap-3">
@@ -289,15 +327,30 @@ const ListingDetails: React.FC = () => {
                   <Icon name="messageCircle" size={14} />
                   Chat
                 </button>
-                {seller?.socials.phone && (
+                <div className="flex gap-2">
                   <button 
-                    onClick={() => triggerSafetyCheck(() => window.location.href = `tel:${seller.socials.phone}`)}
-                    className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-all flex items-center justify-center gap-2"
+                    onClick={() => triggerSafetyCheck(() => {
+                      // Trigger payment flow for tenant
+                      setToastMessage("Payment UI simulation...");
+                      setShowSuccessToast(true);
+                      setTimeout(() => setShowSuccessToast(false), 3000);
+                      // In a real app, this redirects to a Stripe checkout session
+                      navigate(`/payment/${listing.id}`);
+                    })}
+                    className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1"
                   >
-                    <Icon name="phone" size={14} />
-                    Call
+                    <Icon name="creditCard" size={14} />
+                    Pay Now
                   </button>
-                )}
+                  {seller?.socials.phone && (
+                    <button 
+                      onClick={() => triggerSafetyCheck(() => window.location.href = `tel:${seller.socials.phone}`)}
+                      className="flex-none px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Icon name="phone" size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

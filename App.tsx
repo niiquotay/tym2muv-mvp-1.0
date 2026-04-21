@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import SearchPage from './pages/SearchPage';
 import PostAd from './pages/PostAd';
 import ListingDetails from './pages/ListingDetails';
+import PaymentPage from './pages/PaymentPage';
 import Profile from './pages/Profile';
 import Chat from './pages/Chat';
 import Settings from './pages/Settings';
@@ -90,6 +91,11 @@ const App: React.FC = () => {
                 <Route path="/signin" element={<SignIn />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/listing/:id" element={<ListingDetails />} /> 
+                <Route path="/payment/:id" element={
+                  <ProtectedRoute>
+                    <PaymentPage />
+                  </ProtectedRoute>
+                } />
                 
                 {/* Protected Routes */}
                 <Route path="/post" element={

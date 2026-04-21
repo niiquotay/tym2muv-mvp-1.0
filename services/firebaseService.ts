@@ -32,12 +32,12 @@ import {
   getDownloadURL 
 } from 'firebase/storage';
 import { db, auth, storage, handleFirestoreError, OperationType, isConfigValid } from '../firebase';
-import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review } from '../types';
+import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review, Payment } from '../types';
 import { MOCK_USERS, MOCK_LISTINGS, MOCK_ADS, MOCK_CHATS } from './mockData';
 
 // --- AUTH SERVICES ---
 
-export const loginWithGoogle = async () => {
+export const loginWithGoogle = async (selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
   if (!isConfigValid) {
     // Mock login
     const mockUser = MOCK_USERS[0];
@@ -46,7 +46,8 @@ export const loginWithGoogle = async () => {
       displayName: mockUser.name,
       photoURL: mockUser.avatar,
       email: mockUser.socials.email,
-      providerData: []
+      providerData: [],
+      role: mockUser.role
     } as any;
   }
   const provider = new GoogleAuthProvider();
@@ -54,27 +55,48 @@ export const loginWithGoogle = async () => {
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
     
-    // Check if user profile exists, if not create it
+    // Check if user profile exists in 'users' or 'agents'
     const userDoc = await getDoc(doc(db, 'users', user.uid));
-    if (!userDoc.exists()) {
-      const newUser: User = {
-        id: user.uid,
-        name: user.displayName || 'Anonymous',
-        avatar: user.photoURL || '',
-        rating: 5.0,
-        reviewCount: 0,
-        location: '',
-        memberSince: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        bio: '',
-        verified: false,
-        role: 'Customer',
-        socials: {
-          email: user.email || ''
-        }
-      };
-      await setDoc(doc(db, 'users', user.uid), newUser);
+    const agentDoc = await getDoc(doc(db, 'agents', user.uid));
+    
+    if (!userDoc.exists() && !agentDoc.exists()) {
+      // Create new profile based on selectedRole
+      if (selectedRole === 'Agent') {
+        const newAgent = {
+          id: user.uid,
+          name: user.displayName || 'Anonymous',
+          avatar: user.photoURL || '',
+          rating: 5.0,
+          reviewCount: 0,
+          location: '',
+          memberSince: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          bio: '',
+          verified: false,
+          role: 'Agent' as const,
+          agencyName: '',
+          licenseNumber: '',
+          specialization: [],
+          socials: { email: user.email || '' }
+        };
+        await setDoc(doc(db, 'agents', user.uid), newAgent);
+      } else {
+        const newUser = {
+          id: user.uid,
+          name: user.displayName || 'Anonymous',
+          avatar: user.photoURL || '',
+          rating: 5.0,
+          reviewCount: 0,
+          location: '',
+          memberSince: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          bio: '',
+          verified: false,
+          role: 'Tenant' as const,
+          socials: { email: user.email || '' }
+        };
+        await setDoc(doc(db, 'users', user.uid), newUser);
+      }
     }
-    return user;
+    return Object.assign(user, { isNewAccount: !userDoc.exists() && !agentDoc.exists(), role: selectedRole });
   } catch (error) {
     console.error('Login Error:', error);
     throw error;
@@ -114,12 +136,22 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
   if (!isConfigValid) {
     return MOCK_USERS.find(u => u.id === userId) || MOCK_USERS[0];
   }
-  const path = `users/${userId}`;
+  
   try {
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    return userDoc.exists() ? (userDoc.data() as User) : null;
+    let userDoc = await getDoc(doc(db, 'users', userId));
+    if (userDoc.exists()) {
+      return userDoc.data() as User;
+    }
+    
+    // Fallback to agents
+    userDoc = await getDoc(doc(db, 'agents', userId));
+    if (userDoc.exists()) {
+      return userDoc.data() as User;
+    }
+    
+    return null;
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, path);
+    handleFirestoreError(error, OperationType.GET, `/users/${userId} or /agents/${userId}`);
     return null;
   }
 };
@@ -129,13 +161,40 @@ export const updateUserProfile = async (userId: string, updates: Partial<User>) 
     console.log('Mock update user profile:', userId, updates);
     return;
   }
-  const path = `users/${userId}`;
+  
   try {
-    await updateDoc(doc(db, 'users', userId), updates);
+    // Determine which collection they belong to
+    let collectionName = 'users';
+    let docRef = doc(db, 'users', userId);
+    let docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      collectionName = 'agents';
+      docRef = doc(db, 'agents', userId);
+      docSnap = await getDoc(docRef);
+    }
+    
+    if (!docSnap.exists()) {
+      throw new Error("User does not exist in users or agents collection");
+    }
+
+    await updateDoc(docRef, updates);
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    handleFirestoreError(error, OperationType.UPDATE, `user_profile/${userId}`);
   }
 };
+
+export const toggleSavedListing = async (userId: string, listingId: string, currentSaved: string[] = []): Promise<string[]> => {
+  if (!isConfigValid) return currentSaved.includes(listingId) ? currentSaved.filter(id => id !== listingId) : [...currentSaved, listingId];
+  
+  const isCurrentlySaved = currentSaved.includes(listingId);
+  const newSaved = isCurrentlySaved 
+    ? currentSaved.filter(id => id !== listingId) 
+    : [...currentSaved, listingId];
+    
+  await updateUserProfile(userId, { savedListings: newSaved });
+  return newSaved;
+}
 
 // --- LISTING SERVICES ---
 
@@ -147,10 +206,23 @@ export const getListings = async (filters?: SearchFilters): Promise<{ listings: 
     if (filters?.propertyType) listings = listings.filter(l => l.propertyType === filters.propertyType);
     if (filters?.countryCode) listings = listings.filter(l => l.country === filters.countryCode);
     if (filters?.sellerId) listings = listings.filter(l => l.sellerId === filters.sellerId);
+    if (filters?.bedrooms) listings = listings.filter(l => l.bedrooms >= parseInt(filters.bedrooms as unknown as string));
+    
+    // Default to only active unless specifically an admin query
+    if (!filters?.isAdminQuery) {
+      listings = listings.filter(l => l.status === 'active' || l.status === undefined);
+    }
     
     if (filters?.minPrice) listings = listings.filter(l => l.price >= parseInt(filters.minPrice!));
     if (filters?.maxPrice) listings = listings.filter(l => l.price <= parseInt(filters.maxPrice!));
-    if (filters?.location) listings = listings.filter(l => l.location.toLowerCase().includes(filters.location!.toLowerCase()));
+    
+    if (filters?.location) {
+      const searchTerms = filters.location.toLowerCase().split(' ');
+      listings = listings.filter(l => {
+         const matchString = `${l.title} ${l.location} ${l.description}`.toLowerCase();
+         return searchTerms.some(term => matchString.includes(term));
+      });
+    }
 
     const total = listings.length;
     if (filters?.page && filters?.limit) {
@@ -170,12 +242,19 @@ export const getListings = async (filters?: SearchFilters): Promise<{ listings: 
     if (filters?.countryCode) constraints.push(where('country', '==', filters.countryCode));
     if (filters?.sellerId) constraints.push(where('sellerId', '==', filters.sellerId));
     
+    // Note: To avoid complex indices, we filter status client side below
+    
     constraints.push(orderBy('datePosted', 'desc'));
 
     const q = query(collection(db, 'listings'), ...constraints);
     const snapshot = await getDocs(q);
     
     let listings = snapshot.docs.map(doc => doc.data() as Listing);
+    
+    // Filter active by default unless specifically bypassed (e.g., admin dashboard)
+    if (!filters?.isAdminQuery) {
+       listings = listings.filter(l => l.status === 'active' || l.status === undefined);
+    }
     
     // Client-side filtering for more complex cases
     if (filters?.minPrice) {
@@ -185,7 +264,11 @@ export const getListings = async (filters?: SearchFilters): Promise<{ listings: 
       listings = listings.filter(l => l.price <= parseInt(filters.maxPrice!));
     }
     if (filters?.location) {
-      listings = listings.filter(l => l.location.toLowerCase().includes(filters.location!.toLowerCase()));
+      const searchTerms = filters.location.toLowerCase().split(' ');
+      listings = listings.filter(l => {
+         const matchString = `${l.title} ${l.location} ${l.description}`.toLowerCase();
+         return searchTerms.some(term => matchString.includes(term));
+      });
     }
 
     const total = listings.length;
@@ -227,7 +310,8 @@ export const createListing = async (listing: Omit<Listing, 'id'>): Promise<strin
   const path = 'listings';
   try {
     const docRef = doc(collection(db, 'listings'));
-    const newListing = { ...listing, id: docRef.id };
+    // Default new listings to pending so admin can review
+    const newListing = { ...listing, id: docRef.id, status: 'pending' };
     await setDoc(docRef, newListing);
     return docRef.id;
   } catch (error) {
@@ -401,6 +485,41 @@ export const createChat = async (currentUserId: string, otherUserId: string, lis
 };
 
 // --- ADMIN SERVICES ---
+
+// --- PAYMENT SERVICES ---
+export const createPayment = async (paymentData: Omit<Payment, 'id'>): Promise<string> => {
+  if (!isConfigValid) {
+    const id = `mock-payment-${Date.now()}`;
+    console.log('Mock create payment:', id, paymentData);
+    return id;
+  }
+  const path = 'payments';
+  try {
+    const docRef = doc(collection(db, 'payments'));
+    const newPayment = { ...paymentData, id: docRef.id };
+    await setDoc(docRef, newPayment);
+    return docRef.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+    return '';
+  }
+};
+
+export const getUserPayments = async (userId: string): Promise<Payment[]> => {
+  if (!isConfigValid) {
+    return []; // No mock payments initially
+  }
+  const path = 'payments';
+  try {
+    const q = query(collection(db, 'payments'), where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Payment);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+    return [];
+  }
+};
+
 
 export const getAllUsers = async (): Promise<User[]> => {
   if (!isConfigValid) return MOCK_USERS;

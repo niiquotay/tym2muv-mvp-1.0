@@ -8,9 +8,9 @@ import {
   where
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Listing, User, Monetization } from '../types';
+import { Listing, User, Agent, Monetization } from '../types';
 
-const MOCK_USERS: User[] = [
+const MOCK_USERS: (User | Agent)[] = [
   {
     id: 'admin-1',
     name: 'Admin User',
@@ -37,7 +37,7 @@ const MOCK_USERS: User[] = [
     role: 'Agent',
     agencyName: 'Mensah Real Estate',
     socials: { email: 'kofi@example.com', phone: '+233 24 123 4567' }
-  },
+  } as Agent,
   {
     id: 'agent-2',
     name: 'Sarah Okafor',
@@ -51,7 +51,7 @@ const MOCK_USERS: User[] = [
     role: 'Agent',
     agencyName: 'Lagos Luxury Living',
     socials: { email: 'sarah@example.com', phone: '+234 80 123 4567' }
-  }
+  } as Agent
 ];
 
 const MOCK_LISTINGS: Partial<Listing>[] = [

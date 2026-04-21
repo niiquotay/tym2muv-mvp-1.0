@@ -12,6 +12,7 @@ const Profile: React.FC = () => {
   const { user: currentUser, logout } = useAuth();
   const [user, setUser] = useState<User | undefined>(undefined);
   const [listings, setListings] = useState<Listing[]>([]);
+  const [savedListings, setSavedListings] = useState<Listing[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [activeTab, setActiveTab] = useState('listings');
   const [isLoading, setIsLoading] = useState(true);
@@ -74,11 +75,21 @@ const Profile: React.FC = () => {
           const u = await getUserProfile(targetId);
           setUser(u);
           if (u) {
+            // Fetch agent listings
             const { listings: userListings } = await getListings({
               sellerId: u.id,
               limit: 50
             });
             setListings(userListings);
+            
+            // If viewing own tenant profile, fetch saved listings
+            if (targetId === currentUser?.id && u.role === 'Tenant' && u.savedListings?.length) {
+              // Note: A real app would use a specific 'getSavedListings' query with array-contains 
+              // For simplicity, we just fetch all and filter in this MVP view if missing a specific hook
+              const { listings: allListings } = await getListings({ limit: 100 });
+              setSavedListings(allListings.filter(l => u.savedListings?.includes(l.id)));
+              setActiveTab('saved'); // Default to saved tab for tenants
+            }
             
             const vendorReviews = await getReviewsForVendor(u.id);
             setReviews(vendorReviews);
@@ -265,14 +276,25 @@ const Profile: React.FC = () => {
             </div>
 
             {/* Content Tabs */}
-            <div className="border-b border-slate-200 mb-8">
-                <div className="flex gap-8">
-                    <button 
-                       onClick={() => setActiveTab('listings')}
-                       className={`pb-4 px-2 font-bold text-sm uppercase tracking-wider transition-all border-b-2 ${activeTab === 'listings' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-                    >
-                        Properties ({listings.length})
-                    </button>
+            <div className="border-b border-slate-200 mb-8 overflow-x-auto no-scrollbar">
+                <div className="flex gap-8 whitespace-nowrap">
+                    {user.role === 'Tenant' && isMe ? (
+                      <button 
+                         onClick={() => setActiveTab('saved')}
+                         className={`pb-4 px-2 font-bold text-sm uppercase tracking-wider transition-all border-b-2 ${activeTab === 'saved' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                      >
+                          Saved Properties ({savedListings.length})
+                      </button>
+                    ) : null}
+                    
+                    {user.role !== 'Tenant' && (
+                      <button 
+                         onClick={() => setActiveTab('listings')}
+                         className={`pb-4 px-2 font-bold text-sm uppercase tracking-wider transition-all border-b-2 ${activeTab === 'listings' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                      >
+                          Properties ({listings.length})
+                      </button>
+                    )}
                     <button 
                        onClick={() => setActiveTab('reviews')}
                        className={`pb-4 px-2 font-bold text-sm uppercase tracking-wider transition-all border-b-2 ${activeTab === 'reviews' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
@@ -308,6 +330,22 @@ const Profile: React.FC = () => {
                         </div>
                         <h3 className="text-lg font-bold text-slate-700">No properties listed</h3>
                         <p className="text-slate-500 mt-1">This agent hasn't posted any properties yet.</p>
+                    </div>
+                )
+            ) : activeTab === 'saved' ? (
+                savedListings.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                        {savedListings.map(listing => (
+                            <ListingCard key={listing.id} listing={listing} />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="py-20 text-center">
+                        <div className="inline-block p-6 bg-slate-50 rounded-full mb-4">
+                            <Icon name="heart" size={40} className="text-slate-300" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-700">No saved properties</h3>
+                        <p className="text-slate-500 mt-1">You haven't saved any listings to your favorites yet.</p>
                     </div>
                 )
             ) : (

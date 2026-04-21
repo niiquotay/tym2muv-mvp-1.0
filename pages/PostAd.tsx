@@ -50,6 +50,13 @@ const PostAd: React.FC = () => {
   const [imageFiles, setImageFiles] = useState<File[]>([]); // Local files for upload
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Security check for role
+  useEffect(() => {
+    if (user && user.role !== 'Agent' && user.role !== 'Admin') {
+      navigate('/');
+    }
+  }, [user, navigate]);
+
   // Load listing if editing
   useEffect(() => {
     if (editId) {

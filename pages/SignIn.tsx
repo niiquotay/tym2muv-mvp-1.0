@@ -15,6 +15,7 @@ const SignIn: React.FC = () => {
   const [isLoading, setIsLoading] = React.useState(false);
   const [isForgotPassword, setIsForgotPassword] = React.useState(false);
   const [email, setEmail] = React.useState('');
+  const [selectedRole, setSelectedRole] = React.useState<'Tenant' | 'Agent'>('Tenant');
 
   // Where to send them after login (default to home)
   // @ts-ignore
@@ -26,7 +27,7 @@ const SignIn: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const user = await loginWithGoogle();
+      const user = await loginWithGoogle(selectedRole);
       if (user && user.uid && !user.providerData?.length) {
         // Mock user
         setMockUser({
@@ -34,7 +35,7 @@ const SignIn: React.FC = () => {
           name: user.displayName,
           avatar: user.photoURL,
           socials: { email: user.email },
-          role: 'Customer',
+          role: selectedRole,
           verified: true
         });
       }
@@ -138,6 +139,37 @@ const SignIn: React.FC = () => {
               </form>
             ) : (
               <>
+                <div className="flex bg-slate-100 p-1 rounded-xl mb-6 shadow-inner">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('Tenant')}
+                    className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
+                      selectedRole === 'Tenant'
+                        ? 'bg-white text-brand-600 shadow-sm border border-slate-200/50'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    I'm a Renter / Buyer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('Agent')}
+                    className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
+                      selectedRole === 'Agent'
+                        ? 'bg-white text-brand-600 shadow-sm border border-slate-200/50'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    I'm an Agent / Seller
+                  </button>
+                </div>
+
+                <p className="text-sm text-slate-500 mb-6 px-2">
+                  {selectedRole === 'Tenant' 
+                    ? "Welcome! Sign in or create an account to start exploring properties and chatting with agents." 
+                    : "Join our network of professionals. Manage listings, close deals, and build your reputation."}
+                </p>
+
                 <button 
                   onClick={handleGoogleLogin}
                   disabled={isLoading}

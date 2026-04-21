@@ -21,6 +21,14 @@ const SearchPage: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const [page, setPage] = useState(1);
 
+  // Filters State
+  const [filters, setFilters] = useState<any>({
+    propertyType: searchParams.get('propertyType') || 'Property Type',
+    bedrooms: searchParams.get('bedrooms') || 'Beds',
+    bathrooms: searchParams.get('bathrooms') || 'Baths',
+    priceRange: searchParams.get('minPrice') ? `$${searchParams.get('minPrice')} - $${searchParams.get('maxPrice') || '10000+'}` : 'Price Range'
+  });
+
   // Define country-specific ads
   const ads = useMemo(() => {
     const countryName = userLocation.country;
@@ -70,12 +78,28 @@ const SearchPage: React.FC = () => {
     const fetchInitialListings = async () => {
       setIsLoading(true);
       try {
-        const { listings: fetchedListings, total } = await getListings({
+        const initialFilters: any = {
           page: 1,
           limit: ITEMS_PER_BATCH,
           countryCode: userLocation.countryCode,
-          categoryId: query || undefined // Using query as category for now if it matches
-        });
+        };
+
+        if (query) {
+          // If query looks like a category id, use it, else use search term (location for simplicity)
+          if (['real-estate', 'jobs', 'vehicles', 'services'].includes(query.toLowerCase())) {
+            initialFilters.categoryId = query;
+          } else {
+             initialFilters.location = query; // Simple search proxy
+          }
+        }
+        
+        // Take extra parameters from URL if using Smart Search Input
+        if (searchParams.has('location')) initialFilters.location = searchParams.get('location');
+        if (searchParams.has('propertyType')) initialFilters.propertyType = searchParams.get('propertyType');
+        if (searchParams.has('minPrice')) initialFilters.minPrice = searchParams.get('minPrice');
+        if (searchParams.has('maxPrice')) initialFilters.maxPrice = searchParams.get('maxPrice');
+
+        const { listings: fetchedListings, total } = await getListings(initialFilters);
         setListings(fetchedListings);
         setTotalItems(total);
         setPage(1);
@@ -119,7 +143,7 @@ const SearchPage: React.FC = () => {
         {/* Search Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            {query ? `Search Results for "${query}"` : 'All Properties'}
+            {query ? `Search Results for "${query}"` : searchParams.has('location') ? `Properties in "${searchParams.get('location')}"` : 'All Properties'}
           </h1>
           <p className="text-slate-500">Find your perfect home from our verified listings.</p>
         </div>
@@ -128,7 +152,11 @@ const SearchPage: React.FC = () => {
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-8 flex flex-wrap gap-4 items-center">
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="bed" size={16} className="text-slate-400" />
-            <select className="bg-transparent text-sm font-medium text-slate-700 outline-none">
+            <select 
+               value={filters.bedrooms} 
+               onChange={e => setFilters({...filters, bedrooms: e.target.value})}
+               className="bg-transparent text-sm font-medium text-slate-700 outline-none"
+            >
               <option>Beds</option>
               <option>1+ Beds</option>
               <option>2+ Beds</option>
@@ -138,7 +166,11 @@ const SearchPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="bath" size={16} className="text-slate-400" />
-            <select className="bg-transparent text-sm font-medium text-slate-700 outline-none">
+            <select 
+              value={filters.bathrooms}
+              onChange={e => setFilters({...filters, bathrooms: e.target.value})}
+              className="bg-transparent text-sm font-medium text-slate-700 outline-none"
+            >
               <option>Baths</option>
               <option>1+ Baths</option>
               <option>2+ Baths</option>
@@ -147,7 +179,11 @@ const SearchPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="home" size={16} className="text-slate-400" />
-            <select className="bg-transparent text-sm font-medium text-slate-700 outline-none">
+            <select 
+               value={filters.propertyType}
+               onChange={e => setFilters({...filters, propertyType: e.target.value})}
+               className="bg-transparent text-sm font-medium text-slate-700 outline-none"
+            >
               <option>Property Type</option>
               <option>Apartment</option>
               <option>House</option>
@@ -157,7 +193,11 @@ const SearchPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="dollarSign" size={16} className="text-slate-400" />
-            <select className="bg-transparent text-sm font-medium text-slate-700 outline-none">
+            <select 
+               value={filters.priceRange}
+               onChange={e => setFilters({...filters, priceRange: e.target.value})}
+               className="bg-transparent text-sm font-medium text-slate-700 outline-none"
+            >
               <option>Price Range</option>
               <option>$0 - $1,000</option>
               <option>$1,000 - $5,000</option>
@@ -165,7 +205,42 @@ const SearchPage: React.FC = () => {
               <option>$10,000+</option>
             </select>
           </div>
-          <button className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-xl text-sm font-bold hover:bg-brand-600 transition-colors">
+          <button 
+             onClick={() => {
+                const newSearchParams = new URLSearchParams(searchParams);
+                if (filters.propertyType && filters.propertyType !== 'Property Type') newSearchParams.set('propertyType', filters.propertyType);
+                else newSearchParams.delete('propertyType');
+                
+                if (filters.bedrooms && filters.bedrooms !== 'Beds') newSearchParams.set('bedrooms', filters.bedrooms.replace('+', ''));
+                else newSearchParams.delete('bedrooms');
+                
+                if (filters.priceRange && filters.priceRange !== 'Price Range') {
+                    if (filters.priceRange === '$10,000+') {
+                        newSearchParams.set('minPrice', '10000');
+                        newSearchParams.delete('maxPrice');
+                    } else {
+                        const parts = filters.priceRange.replace(/\$/g, '').replace(/,/g, '').split(' - ');
+                        if (parts.length === 2) {
+                            newSearchParams.set('minPrice', parts[0]);
+                            newSearchParams.set('maxPrice', parts[1]);
+                        }
+                    }
+                } else {
+                    newSearchParams.delete('minPrice');
+                    newSearchParams.delete('maxPrice');
+                }
+                
+                // Keep location logic if it was set
+                if (query && !newSearchParams.has('location')) newSearchParams.set('location', query);
+                
+                // Update history to trigger re-fetch
+                window.history.replaceState({}, '', `${window.location.pathname}?${newSearchParams.toString()}`);
+                
+                // For simplicity, force reload for now to apply filters
+                window.location.reload();
+             }}
+             className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-xl text-sm font-bold hover:bg-brand-600 transition-colors"
+          >
             <Icon name="search" size={16} />
             Apply Filters
           </button>

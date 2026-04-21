@@ -1,7 +1,7 @@
 
-import { Listing, User, Monetization, Chat, ChatMessage } from '../types';
+import { Listing, User, Agent, Monetization, Chat, ChatMessage } from '../types';
 
-export const MOCK_USERS: User[] = [
+export const MOCK_USERS: (User | Agent)[] = [
   {
     id: 'admin-1',
     name: 'Admin User',
@@ -28,7 +28,7 @@ export const MOCK_USERS: User[] = [
     role: 'Agent',
     agencyName: 'Mensah Real Estate',
     socials: { email: 'kofi@example.com', phone: '+233 24 123 4567' }
-  },
+  } as Agent,
   {
     id: 'agent-2',
     name: 'Sarah Okafor',
@@ -42,7 +42,7 @@ export const MOCK_USERS: User[] = [
     role: 'Agent',
     agencyName: 'Lagos Luxury Living',
     socials: { email: 'sarah@example.com', phone: '+234 80 123 4567' }
-  }
+  } as Agent
 ];
 
 export const MOCK_LISTINGS: Listing[] = [
