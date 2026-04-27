@@ -70,6 +70,7 @@ const Icon: React.FC<IconProps> = ({
     linkedin: 'Linkedin',
     phone: 'Phone',
     mail: 'Mail',
+    calendar: 'Calendar',
     clock: 'Clock',
     navigation: 'Navigation',
     package: 'Package',
@@ -118,7 +119,6 @@ const Icon: React.FC<IconProps> = ({
     parking: 'ParkingCircle',
     security: 'ShieldCheck',
     maximize: 'Maximize',
-    calendar: 'Calendar',
     dollarSign: 'DollarSign',
   };
 

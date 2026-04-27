@@ -134,6 +134,23 @@
       },
       "required": ["id", "participants"]
     },
+    "ViewRequest": {
+      "title": "ViewRequest",
+      "description": "Request from a tenant to view a listing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "listingId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "agentId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "completed"] },
+        "requestedDate": { "type": "string" },
+        "requestedTime": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "listingId", "tenantId", "agentId", "status", "requestedDate", "requestedTime", "createdAt"]
+    },
     "ChatMessage": {
       "title": "ChatMessage",
       "description": "Individual message in a chat",
@@ -216,6 +233,10 @@
     "/reviews/{reviewId}": {
       "schema": "Review",
       "description": "Vendor reviews"
+    },
+    "/view_requests/{requestId}": {
+      "schema": "ViewRequest",
+      "description": "Property view requests from tenants to agents"
     }
   }
 }

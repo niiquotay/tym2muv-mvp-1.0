@@ -195,7 +195,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
           <div className="mt-auto p-2 pt-1.5 flex items-center justify-between border-t border-slate-100 bg-slate-50/80 rounded-b-xl pointer-events-auto">
              <div className="flex flex-col gap-0.5">
                <div className="flex items-baseline gap-0.5 text-brand-600">
-                 <span className="text-[11px] font-bold">{listing.currency || 'USD'} {getSymbolFromCode(listing.currency || 'USD')}</span>
+                 <span className="text-[11px] font-bold">{getSymbolFromCode(listing.currency || 'USD')}</span>
                  <span className="text-[11px] font-bold tracking-tight">{listing.price.toLocaleString()}</span>
                </div>
                {/* Mobile Location Tag */}

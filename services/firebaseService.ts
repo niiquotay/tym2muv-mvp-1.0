@@ -23,7 +23,15 @@ import {
   signOut, 
   onAuthStateChanged,
   sendPasswordResetEmail as firebaseSendPasswordResetEmail,
-  User as FirebaseUser
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
+  User as FirebaseUser,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  ConfirmationResult,
+  confirmPasswordReset as firebaseConfirmPasswordReset,
+  verifyPasswordResetCode as firebaseVerifyPasswordResetCode
 } from 'firebase/auth';
 import { 
   getStorage, 
@@ -32,7 +40,7 @@ import {
   getDownloadURL 
 } from 'firebase/storage';
 import { db, auth, storage, handleFirestoreError, OperationType, isConfigValid } from '../firebase';
-import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review, Payment } from '../types';
+import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review, Payment, ViewRequest } from '../types';
 import { MOCK_USERS, MOCK_LISTINGS, MOCK_ADS, MOCK_CHATS } from './mockData';
 
 // --- AUTH SERVICES ---
@@ -97,8 +105,106 @@ export const loginWithGoogle = async (selectedRole: 'Tenant' | 'Agent' = 'Tenant
       }
     }
     return Object.assign(user, { isNewAccount: !userDoc.exists() && !agentDoc.exists(), role: selectedRole });
+  } catch (error: any) {
+    if (error?.code === 'auth/popup-closed-by-user') {
+      console.log('Login cancelled by user.');
+    } else {
+      console.error('Login Error:', error);
+    }
+    throw error;
+  }
+};
+
+export const loginWithEmail = async (email: string, password: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
+  if (!isConfigValid) {
+    // Mock login
+    const mockUser = MOCK_USERS[Math.floor(Math.random() * MOCK_USERS.length)];
+    return {
+      uid: mockUser.id,
+      displayName: mockUser.name,
+      photoURL: mockUser.avatar,
+      email: email,
+      providerData: [],
+      role: selectedRole
+    } as any;
+  }
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    const user = result.user;
+    
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    const agentDoc = await getDoc(doc(db, 'agents', user.uid));
+    
+    // If somehow a profile doesn't exist, we fall back gracefully but usually signup creates it
+    if (!userDoc.exists() && !agentDoc.exists()) {
+      return Object.assign(user, { isNewAccount: true, role: selectedRole });
+    }
+    
+    const role = agentDoc.exists() ? 'Agent' : 'Tenant';
+    return Object.assign(user, { isNewAccount: false, role });
   } catch (error) {
-    console.error('Login Error:', error);
+    console.error('Email Login Error:', error);
+    throw error;
+  }
+};
+
+export const signupWithEmail = async (email: string, password: string, name: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
+  if (!isConfigValid) {
+    return {
+      uid: 'user-' + Date.now(),
+      displayName: name || 'Mock User',
+      photoURL: '',
+      email: email,
+      providerData: [],
+      role: selectedRole
+    } as any;
+  }
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    const user = result.user;
+    
+    if (name) {
+      await updateProfile(user, { displayName: name });
+    }
+    
+    if (selectedRole === 'Agent') {
+      const newAgent = {
+        id: user.uid,
+        name: name || user.displayName || 'Anonymous',
+        avatar: user.photoURL || '',
+        rating: 5.0,
+        reviewCount: 0,
+        location: '',
+        memberSince: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        bio: '',
+        verified: false,
+        role: 'Agent' as const,
+        agencyName: '',
+        licenseNumber: '',
+        specialization: [],
+        socials: { email: user.email || '' }
+      };
+      await setDoc(doc(db, 'agents', user.uid), newAgent);
+    } else {
+      const newUser = {
+        id: user.uid,
+        name: name || user.displayName || 'Anonymous',
+        avatar: user.photoURL || '',
+        rating: 5.0,
+        reviewCount: 0,
+        location: '',
+        memberSince: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        bio: '',
+        verified: false,
+        role: 'Tenant' as const,
+        socials: { email: user.email || '' }
+      };
+      await setDoc(doc(db, 'users', user.uid), newUser);
+    }
+    
+    return Object.assign(user, { isNewAccount: true, role: selectedRole });
+  } catch (error) {
+    console.error('Email Signup Error:', error);
     throw error;
   }
 };
@@ -123,12 +229,131 @@ export const sendPasswordResetEmail = async (email: string) => {
     return;
   }
   try {
+    // If the user configures their Firebase console to point here, it uses that implicitly.
+    // We can also pass an optional actionCodeSettings if we want to force it, but let's stick to simple
     await firebaseSendPasswordResetEmail(auth, email);
   } catch (error) {
     console.error('Error sending password reset email:', error);
     throw error;
   }
 };
+
+export const verifyPasswordResetCode = async (code: string) => {
+  if (!isConfigValid) {
+    return 'user@example.com';
+  }
+  try {
+    return await firebaseVerifyPasswordResetCode(auth, code);
+  } catch (error) {
+    console.error('Error verifying password reset code:', error);
+    throw error;
+  }
+};
+
+export const confirmPasswordReset = async (code: string, newPassword: string) => {
+  if (!isConfigValid) {
+    console.log('Mock confirm password reset for code:', code);
+    return;
+  }
+  try {
+    await firebaseConfirmPasswordReset(auth, code, newPassword);
+  } catch (error) {
+    console.error('Error confirming password reset:', error);
+    throw error;
+  }
+};
+
+export const setupRecaptcha = (containerId: string) => {
+  if (!isConfigValid) return null;
+  // @ts-ignore
+  if (!window.recaptchaVerifier) {
+    // @ts-ignore
+    window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+      'size': 'invisible',
+      'callback': () => {
+        // reCAPTCHA solved
+      }
+    });
+  }
+  // @ts-ignore
+  return window.recaptchaVerifier;
+};
+
+export const requestPhoneCode = async (phoneNumber: string, appVerifier: any): Promise<ConfirmationResult | null> => {
+  if (!isConfigValid) {
+    console.log('Mock request phone code:', phoneNumber);
+    return {
+      confirm: async (code: string) => {
+        // Mock confirmation logic
+        if (code === '000000') {
+           throw new Error('Invalid code');
+        }
+        const mockUser = MOCK_USERS[0];
+        return {
+          user: {
+            uid: mockUser.id,
+            displayName: mockUser.name,
+            photoURL: mockUser.avatar,
+            phoneNumber: phoneNumber
+          }
+        };
+      }
+    } as any;
+  }
+  return await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+};
+
+export const handlePhoneUserCreation = async (user: any, name: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
+    if (!isConfigValid) {
+      return Object.assign(user, { role: selectedRole, isNewAccount: false });
+    }
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    const agentDoc = await getDoc(doc(db, 'agents', user.uid));
+    
+    if (!userDoc.exists() && !agentDoc.exists()) {
+      if (name) {
+        await updateProfile(user, { displayName: name });
+      }
+      
+      if (selectedRole === 'Agent') {
+        const newAgent = {
+          id: user.uid,
+          name: name || user.displayName || 'Anonymous',
+          avatar: user.photoURL || '',
+          rating: 5.0,
+          reviewCount: 0,
+          location: '',
+          memberSince: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          bio: '',
+          verified: false,
+          role: 'Agent' as const,
+          agencyName: '',
+          licenseNumber: '',
+          specialization: [],
+          socials: { phone: user.phoneNumber || '' }
+        };
+        await setDoc(doc(db, 'agents', user.uid), newAgent);
+      } else {
+        const newUser = {
+          id: user.uid,
+          name: name || user.displayName || 'Anonymous',
+          avatar: user.photoURL || '',
+          rating: 5.0,
+          reviewCount: 0,
+          location: '',
+          memberSince: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          bio: '',
+          verified: false,
+          role: 'Tenant' as const,
+          socials: { phone: user.phoneNumber || '' }
+        };
+        await setDoc(doc(db, 'users', user.uid), newUser);
+      }
+      return Object.assign(user, { role: selectedRole, isNewAccount: true });
+    }
+    const role = agentDoc.exists() ? 'Agent' : 'Tenant';
+    return Object.assign(user, { role, isNewAccount: false });
+}
 
 // --- USER SERVICES ---
 
@@ -151,7 +376,9 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
     
     return null;
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, `/users/${userId} or /agents/${userId}`);
+    // We expect "Missing or insufficient permissions" for anonymous users trying to read PII user profiles.
+    // So we just return null rather than crashing the caller.
+    console.log(`Could not fetch profile for user ${userId} maybe due to PII Firestore rules:`, error);
     return null;
   }
 };
@@ -204,14 +431,24 @@ export const getListings = async (filters?: SearchFilters): Promise<{ listings: 
     if (filters?.categoryId) listings = listings.filter(l => l.categoryId === filters.categoryId);
     if (filters?.type) listings = listings.filter(l => l.type === filters.type);
     if (filters?.propertyType) listings = listings.filter(l => l.propertyType === filters.propertyType);
-    if (filters?.countryCode) listings = listings.filter(l => l.country === filters.countryCode);
-    if (filters?.sellerId) listings = listings.filter(l => l.sellerId === filters.sellerId);
-    if (filters?.bedrooms) listings = listings.filter(l => l.bedrooms >= parseInt(filters.bedrooms as unknown as string));
     
     // Default to only active unless specifically an admin query
     if (!filters?.isAdminQuery) {
       listings = listings.filter(l => l.status === 'active' || l.status === undefined);
     }
+    
+    // Country code filtering with fallback
+    if (filters?.countryCode) {
+      const countryListings = listings.filter(l => l.country === filters.countryCode);
+      if (countryListings.length > 0) {
+        listings = countryListings;
+      }
+      // If no listings match the country, we just fall back and show all for simulation purposes
+    }
+    
+    if (filters?.sellerId) listings = listings.filter(l => l.sellerId === filters.sellerId);
+    if (filters?.bedrooms) listings = listings.filter(l => l.bedrooms >= parseInt(filters.bedrooms as unknown as string));
+
     
     if (filters?.minPrice) listings = listings.filter(l => l.price >= parseInt(filters.minPrice!));
     if (filters?.maxPrice) listings = listings.filter(l => l.price <= parseInt(filters.maxPrice!));
@@ -242,9 +479,7 @@ export const getListings = async (filters?: SearchFilters): Promise<{ listings: 
     if (filters?.countryCode) constraints.push(where('country', '==', filters.countryCode));
     if (filters?.sellerId) constraints.push(where('sellerId', '==', filters.sellerId));
     
-    // Note: To avoid complex indices, we filter status client side below
-    
-    constraints.push(orderBy('datePosted', 'desc'));
+    // Note: To avoid complex indices, we filter status and sort client side below
 
     const q = query(collection(db, 'listings'), ...constraints);
     const snapshot = await getDocs(q);
@@ -256,6 +491,19 @@ export const getListings = async (filters?: SearchFilters): Promise<{ listings: 
        listings = listings.filter(l => l.status === 'active' || l.status === undefined);
     }
     
+    // Implement country code fallback for firestore as well to ensure users see content
+    if (filters?.countryCode) {
+      if (listings.length === 0) {
+        // If they filtered by country and got nothing, fetch ALL and filter out country
+        const allSnapshot = await getDocs(collection(db, 'listings'));
+        let allListings = allSnapshot.docs.map(doc => doc.data() as Listing);
+        if (!filters?.isAdminQuery) {
+          allListings = allListings.filter(l => l.status === 'active' || l.status === undefined);
+        }
+        listings = allListings;
+      }
+    }
+
     // Client-side filtering for more complex cases
     if (filters?.minPrice) {
       listings = listings.filter(l => l.price >= parseInt(filters.minPrice!));
@@ -269,6 +517,46 @@ export const getListings = async (filters?: SearchFilters): Promise<{ listings: 
          const matchString = `${l.title} ${l.location} ${l.description}`.toLowerCase();
          return searchTerms.some(term => matchString.includes(term));
       });
+    }
+
+    // Client-side sort by date descending
+    listings.sort((a, b) => {
+      const dateA = new Date(a.datePosted).getTime();
+      const dateB = new Date(b.datePosted).getTime();
+      return dateB - dateA;
+    });
+
+    // If absolutely no listings exist in the DB, fallback to mock data (for preview/demo purposes)
+    if (listings.length === 0) {
+      listings = [...MOCK_LISTINGS];
+      if (filters?.categoryId) listings = listings.filter(l => l.categoryId === filters.categoryId);
+      if (filters?.type) listings = listings.filter(l => l.type === filters.type);
+      if (filters?.propertyType) listings = listings.filter(l => l.propertyType === filters.propertyType);
+      
+      // Default to only active unless specifically an admin query
+      if (!filters?.isAdminQuery) {
+        listings = listings.filter(l => l.status === 'active' || l.status === undefined);
+      }
+      
+      // Country code filtering with fallback
+      if (filters?.countryCode) {
+        const countryListings = listings.filter(l => l.country === filters.countryCode);
+        if (countryListings.length > 0) {
+          listings = countryListings;
+        }
+      }
+      
+      if (filters?.sellerId) listings = listings.filter(l => l.sellerId === filters.sellerId);
+      
+      if (filters?.minPrice) listings = listings.filter(l => l.price >= parseInt(filters.minPrice!));
+      if (filters?.maxPrice) listings = listings.filter(l => l.price <= parseInt(filters.maxPrice!));
+      if (filters?.location) {
+        const searchTerms = filters.location.toLowerCase().split(' ');
+        listings = listings.filter(l => {
+           const matchString = `${l.title} ${l.location} ${l.description}`.toLowerCase();
+           return searchTerms.some(term => matchString.includes(term));
+        });
+      }
     }
 
     const total = listings.length;
@@ -716,6 +1004,35 @@ export const trackAdImpression = async (id: string) => {
       const currentImpressions = adSnap.data().impressions || 0;
       await updateDoc(adRef, { impressions: currentImpressions + 1 });
     }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+};
+
+// --- VIEW REQUEST SERVICES ---
+
+export const getViewRequestsForAgent = async (agentId: string): Promise<ViewRequest[]> => {
+  if (!isConfigValid) {
+    return [];
+  }
+  const path = 'view_requests';
+  try {
+    const q = query(collection(db, 'view_requests'), where('agentId', '==', agentId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as ViewRequest);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+    return [];
+  }
+};
+
+export const updateViewRequestStatus = async (id: string, status: ViewRequest['status']) => {
+  if (!isConfigValid) {
+    return;
+  }
+  const path = `view_requests/${id}`;
+  try {
+    await updateDoc(doc(db, 'view_requests', id), { status });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }

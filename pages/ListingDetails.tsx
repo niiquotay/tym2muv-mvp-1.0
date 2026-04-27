@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getListingById, getUserProfile, getListings, toggleSavedListing } from '../services/firebaseService';
+import { isConfigValid } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Listing, User } from '../types';
 import Icon from '../components/Icon';
@@ -149,14 +150,43 @@ const ListingDetails: React.FC = () => {
     }
   };
 
-  const handleRequestDelivery = () => {
-    const action = () => {
-      setIsDeliveryRequested(true);
-      setToastMessage("Delivery request sent to seller!");
+  const handleRequestView = async () => {
+    if (!user) {
+      navigate('/signin');
+      return;
+    }
+    
+    setIsDeliveryRequested(true); // Can rename this state later, reusing for loading indicator for now
+    
+    try {
+      if (isConfigValid) {
+        // Real implementation
+        const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
+        const { db } = await import('../firebase');
+        
+        await addDoc(collection(db, 'view_requests'), {
+          listingId: listing?.id,
+          tenantId: user.id,
+          agentId: listing?.sellerId,
+          status: 'pending',
+          requestedDate: new Date().toISOString().split('T')[0], // Could add a date picker later
+          requestedTime: '10:00 AM',
+          message: `I am interested in viewing ${listing?.title}.`,
+          createdAt: new Date().toISOString()
+        });
+      }
+      
+      setToastMessage("Property view requested! The agent will contact you.");
       setShowSuccessToast(true);
       setTimeout(() => setShowSuccessToast(false), 3000);
-    };
-    triggerSafetyCheck(action);
+    } catch (error) {
+      console.error("Error creating view request:", error);
+      setToastMessage("Failed to send request. Please try again.");
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
+    } finally {
+      setIsDeliveryRequested(false);
+    }
   };
 
   return (
@@ -203,7 +233,7 @@ const ListingDetails: React.FC = () => {
             {/* Column 1 Row 2 - Price */}
             <div className="py-1.5 border-b border-slate-100">
               <div className="text-lg lg:text-xl font-black text-brand-600 flex items-baseline gap-1">
-                <span className="text-xs font-bold">{listing.currency || 'USD'} {getSymbolFromCode(listing.currency || 'USD')}</span>
+                <span className="text-xs font-bold">{getSymbolFromCode(listing.currency || 'USD')}</span>
                 {listing.price.toLocaleString()}
                 {listing.type === 'Rent' && <span className="text-[10px] font-medium text-slate-400">/mo</span>}
               </div>
@@ -249,7 +279,7 @@ const ListingDetails: React.FC = () => {
                {listing.sqft && (
                  <div className="flex items-center gap-3">
                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-500">
-                     <Icon name="maximize" size={16} />
+                     <Icon name="map" size={16} />
                    </div>
                    <div>
                      <p className="text-[8px] text-slate-400 font-bold uppercase">Square Feet</p>
@@ -319,35 +349,35 @@ const ListingDetails: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2" onClick={(e) => e.stopPropagation()}>
+              <div className="pt-4 grid grid-cols-2 gap-3" onClick={(e) => e.stopPropagation()}>
                 <button 
                   onClick={handleChat}
-                  className="px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2"
+                  className="px-3 py-3 bg-slate-900 hover:bg-black text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2"
                 >
-                  <Icon name="messageCircle" size={14} />
-                  Chat
+                  <Icon name="messageCircle" size={16} />
+                  Message
                 </button>
                 <div className="flex gap-2">
                   <button 
-                    onClick={() => triggerSafetyCheck(() => {
-                      // Trigger payment flow for tenant
-                      setToastMessage("Payment UI simulation...");
-                      setShowSuccessToast(true);
-                      setTimeout(() => setShowSuccessToast(false), 3000);
-                      // In a real app, this redirects to a Stripe checkout session
-                      navigate(`/payment/${listing.id}`);
-                    })}
-                    className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1"
+                    onClick={() => triggerSafetyCheck(() => handleRequestView())}
+                    disabled={isDeliveryRequested}
+                    className="flex-1 px-3 py-3 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2"
                   >
-                    <Icon name="creditCard" size={14} />
-                    Pay Now
+                    {isDeliveryRequested ? (
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Icon name="calendar" size={16} />
+                        Book Viewing
+                      </>
+                    )}
                   </button>
                   {seller?.socials.phone && (
                     <button 
                       onClick={() => triggerSafetyCheck(() => window.location.href = `tel:${seller.socials.phone}`)}
-                      className="flex-none px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-all flex items-center justify-center gap-2"
+                      className="flex-none w-12 py-3 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2"
                     >
-                      <Icon name="phone" size={14} />
+                      <Icon name="phone" size={16} />
                     </button>
                   )}
                 </div>

@@ -142,6 +142,18 @@ export interface Chat {
   lastSenderId?: string;
 }
 
+export interface ViewRequest {
+  id: string;
+  listingId: string;
+  tenantId: string;
+  agentId: string;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  requestedDate: string;
+  requestedTime: string;
+  message?: string;
+  createdAt: string;
+}
+
 export interface Monetization {
   id: string;
   type: 'banner' | 'popup' | 'card' | 'tall';

@@ -12,6 +12,7 @@ import Profile from './pages/Profile';
 import Chat from './pages/Chat';
 import Settings from './pages/Settings';
 import SignIn from './pages/SignIn';
+import ResetPassword from './pages/ResetPassword';
 import AdminDashboard from './pages/AdminDashboard';
 import { AuthProvider } from './context/AuthContext';
 import { LocationProvider } from './context/LocationContext';
@@ -89,6 +90,7 @@ const App: React.FC = () => {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/signin" element={<SignIn />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/listing/:id" element={<ListingDetails />} /> 
                 <Route path="/payment/:id" element={

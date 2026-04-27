@@ -33,6 +33,22 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       }
+    },
+    build: {
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          constants: path.resolve(__dirname, 'constants.ts')
+        },
+        output: {
+          entryFileNames: (assetInfo) => {
+            if (assetInfo.name === 'constants') {
+              return 'constants.js';
+            }
+            return 'assets/[name]-[hash].js';
+          }
+        }
+      }
     }
   };
 });
