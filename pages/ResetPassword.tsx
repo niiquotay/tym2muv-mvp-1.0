@@ -14,9 +14,10 @@ const ResetPassword = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // URL will usually look like /reset-password?oobCode=XYZ
-  const queryParams = new URLSearchParams(location.search);
-  const oobCode = queryParams.get('oobCode');
+  // Check both Hash router's search and main window's search
+  const queryParamsRaw = new URLSearchParams(window.location.search);
+  const queryParamsHash = new URLSearchParams(location.search);
+  const oobCode = queryParamsHash.get('oobCode') || queryParamsRaw.get('oobCode');
 
   useEffect(() => {
     async function checkCode() {

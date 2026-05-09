@@ -28,18 +28,7 @@ if (isConfigValid) {
 
 export { app, db, auth, storage };
 
-// Validate Connection to Firestore
-async function testConnection() {
-  if (!isConfigValid) return;
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
-    }
-  }
-}
-testConnection();
+// Removed testConnection to prevent false positive offline warnings during startup
 
 export enum OperationType {
   CREATE = 'create',

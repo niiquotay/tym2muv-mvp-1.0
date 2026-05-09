@@ -205,13 +205,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         </Link>
                     </div>
                     ) : (
-                    <Link 
-                        to="/signin" 
-                        className="flex items-center gap-1 font-bold text-sm text-slate-600 hover:text-slate-900 px-1 sm:px-2 transition-colors"
-                    >
-                        <Icon name="user" size={18} className="sm:hidden" />
-                        <span className="hidden sm:inline">Sign In</span>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link 
+                          to="/signin" 
+                          className="flex items-center gap-1 font-bold text-sm text-slate-600 hover:text-slate-900 px-1 sm:px-2 transition-colors"
+                      >
+                          <Icon name="user" size={18} className="sm:hidden" />
+                          <span className="hidden sm:inline">Sign In</span>
+                      </Link>
+                      <Link 
+                          to="/signup" 
+                          className="hidden sm:flex items-center gap-1 font-bold text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-200/50"
+                      >
+                          <span>Sign Up</span>
+                      </Link>
+                    </div>
                     )}
                 </div>
             </div>

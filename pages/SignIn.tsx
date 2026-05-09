@@ -14,7 +14,11 @@ const SignIn: React.FC = () => {
   const [message, setMessage] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isForgotPassword, setIsForgotPassword] = React.useState(false);
-  const [isSignUp, setIsSignUp] = React.useState(false);
+  const [isSignUp, setIsSignUp] = React.useState(location.pathname === '/signup');
+  
+  React.useEffect(() => {
+    setIsSignUp(location.pathname === '/signup');
+  }, [location.pathname]);
   const [authMethod, setAuthMethod] = React.useState<'email' | 'phone'>('email');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -433,13 +437,12 @@ const SignIn: React.FC = () => {
                 </button>
 
                 <div className="mt-6 text-center space-y-4">
-                  <button 
-                    type="button"
-                    onClick={() => setIsSignUp(!isSignUp)}
-                    className="text-sm text-slate-600 hover:text-brand-600 font-medium transition-colors"
+                  <Link 
+                    to={isSignUp ? '/signin' : '/signup'}
+                    className="inline-block text-sm text-slate-600 hover:text-brand-600 font-medium transition-colors"
                   >
                     {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-                  </button>
+                  </Link>
                   
                   {!isSignUp && (
                     <div className="block pt-2 border-t border-slate-100">
