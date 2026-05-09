@@ -34,6 +34,10 @@ DO $$ BEGIN
     CREATE TYPE report_target AS ENUM ('user', 'property', 'agent', 'message');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
+DO $$ BEGIN
+    CREATE TYPE ad_placement AS ENUM ('card', 'banner', 'popup', 'tall');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
 -- ==========================================
 -- STEP 2: CORE TABLES
 -- ==========================================
@@ -197,6 +201,26 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 12. Monetization Ads
+CREATE TABLE IF NOT EXISTS public.monetization_ads (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    admin_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    cta TEXT,
+    type ad_placement DEFAULT 'card',
+    image_url TEXT NOT NULL,
+    target_url TEXT NOT NULL,
+    color TEXT,
+    active BOOLEAN DEFAULT true,
+    priority INTEGER DEFAULT 0,
+    country_code TEXT,
+    clicks INTEGER DEFAULT 0,
+    impressions INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ==========================================
 -- STEP 5: SECURITY FUNCTIONS & LOGIC
 -- ==========================================
@@ -319,6 +343,7 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.monetization_ads ENABLE ROW LEVEL SECURITY;
 
 -- 8.1 PROFILES & AGENTS
 DROP POLICY IF EXISTS "Public can view valid profiles" ON public.profiles;
@@ -413,6 +438,13 @@ CREATE POLICY "Admins read settings" ON public.system_settings FOR SELECT USING 
 
 DROP POLICY IF EXISTS "Admins write settings" ON public.system_settings;
 CREATE POLICY "Admins write settings" ON public.system_settings FOR ALL USING (public.is_admin());
+
+-- 8.6 MONETIZATION ADS
+DROP POLICY IF EXISTS "Public can view active ads" ON public.monetization_ads;
+CREATE POLICY "Public can view active ads" ON public.monetization_ads FOR SELECT USING (active = true OR public.is_admin());
+
+DROP POLICY IF EXISTS "Admins manage ads" ON public.monetization_ads;
+CREATE POLICY "Admins manage ads" ON public.monetization_ads FOR ALL USING (public.is_admin());
 
 -- ========================================================================================
 -- END OF SCRIPT

@@ -43,7 +43,8 @@ import {
   updateListing,
   createMonetizationAd,
   updateMonetizationAd,
-  deleteMonetizationAd
+  deleteMonetizationAd,
+  uploadImage
 } from '../services/firebaseService';
 import { 
   seedMockData, 
@@ -64,6 +65,7 @@ const AdminDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAdModal, setShowAdModal] = useState(false);
   const [editingAd, setEditingAd] = useState<Monetization | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -104,27 +106,45 @@ const AdminDashboard: React.FC = () => {
   const handleAdSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const adData = {
-      type: formData.get('type') as any,
-      title: formData.get('title') as string,
-      description: formData.get('description') as string,
-      cta: formData.get('cta') as string,
-      image: formData.get('image') as string,
-      link: formData.get('link') as string,
-      color: formData.get('color') as string,
-      active: formData.get('active') === 'on',
-      priority: parseInt(formData.get('priority') as string) || 0,
-      countryCode: formData.get('countryCode') as string || undefined
-    };
+    
+    setIsUploading(true);
+    let imageUrl = formData.get('image_url') as string;
+    const file = formData.get('image_file') as File;
+    
+    try {
+      if (file && file.size > 0) {
+        // Upload image if file is provided
+        const path = `monetization/${Date.now()}_${file.name}`;
+        imageUrl = await uploadImage(file, path);
+      }
+      
+      const adData = {
+        type: formData.get('type') as any,
+        title: formData.get('title') as string,
+        description: formData.get('description') as string,
+        cta: formData.get('cta') as string,
+        image: imageUrl || editingAd?.image || '',
+        link: formData.get('link') as string,
+        color: formData.get('color') as string,
+        active: formData.get('active') === 'on',
+        priority: parseInt(formData.get('priority') as string) || 0,
+        countryCode: formData.get('countryCode') as string || undefined
+      };
 
-    if (editingAd) {
-      await updateMonetizationAd(editingAd.id, adData);
-    } else {
-      await createMonetizationAd(adData);
+      if (editingAd) {
+        await updateMonetizationAd(editingAd.id, adData);
+      } else {
+        await createMonetizationAd(adData);
+      }
+      setShowAdModal(false);
+      setEditingAd(null);
+      fetchData();
+    } catch (error) {
+      console.error('Error saving ad:', error);
+      alert('Error saving ad. Please try again.');
+    } finally {
+      setIsUploading(false);
     }
-    setShowAdModal(false);
-    setEditingAd(null);
-    fetchData();
   };
 
   const handleDeleteAd = async (id: string) => {
@@ -655,15 +675,34 @@ const AdminDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">Image URL</label>
-                <input 
-                  name="image" 
-                  defaultValue={editingAd?.image}
-                  required
-                  placeholder="https://..."
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none" 
-                />
+              <div className="space-y-4">
+                <label className="text-sm font-bold text-gray-700">Image Upload</label>
+                
+                <div className="space-y-2">
+                  <label className="text-xs text-gray-500">Upload File</label>
+                  <input 
+                    type="file"
+                    name="image_file" 
+                    accept="image/*"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-600 hover:file:bg-orange-100" 
+                  />
+                </div>
+                
+                <div className="flex items-center gap-4">
+                  <div className="h-px bg-gray-200 flex-1"></div>
+                  <span className="text-xs text-gray-400 font-medium">OR URL</span>
+                  <div className="h-px bg-gray-200 flex-1"></div>
+                </div>
+
+                <div className="space-y-2">
+                  <input 
+                    type="url"
+                    name="image_url" 
+                    defaultValue={editingAd?.image}
+                    placeholder="https://... (Image URL)"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-sm" 
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-6">
@@ -707,9 +746,17 @@ const AdminDashboard: React.FC = () => {
                 </button>
                 <button 
                   type="submit"
-                  className="px-8 py-2 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-200"
+                  disabled={isUploading}
+                  className="px-8 py-2 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-200 disabled:opacity-50 flex items-center gap-2"
                 >
-                  {editingAd ? 'Update Campaign' : 'Launch Campaign'}
+                  {isUploading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Processing...
+                    </>
+                  ) : (
+                    editingAd ? 'Update Campaign' : 'Launch Campaign'
+                  )}
                 </button>
               </div>
             </form>
