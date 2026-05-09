@@ -18,8 +18,6 @@ import {
   QueryConstraint
 } from 'firebase/firestore';
 import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged,
   sendPasswordResetEmail as firebaseSendPasswordResetEmail,
@@ -45,75 +43,6 @@ import { MOCK_USERS, MOCK_LISTINGS, MOCK_ADS, MOCK_CHATS } from './mockData';
 
 // --- AUTH SERVICES ---
 
-export const loginWithGoogle = async (selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
-  if (!isConfigValid) {
-    // Mock login
-    const mockUser = MOCK_USERS[0];
-    return {
-      uid: mockUser.id,
-      displayName: mockUser.name,
-      photoURL: mockUser.avatar,
-      email: mockUser.socials.email,
-      providerData: [],
-      role: mockUser.role
-    } as any;
-  }
-  const provider = new GoogleAuthProvider();
-  try {
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-    
-    // Check if user profile exists in 'users' or 'agents'
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    const agentDoc = await getDoc(doc(db, 'agents', user.uid));
-    
-    if (!userDoc.exists() && !agentDoc.exists()) {
-      // Create new profile based on selectedRole
-      if (selectedRole === 'Agent') {
-        const newAgent = {
-          id: user.uid,
-          name: user.displayName || 'Anonymous',
-          avatar: user.photoURL || '',
-          rating: 5.0,
-          reviewCount: 0,
-          location: '',
-          memberSince: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-          bio: '',
-          verified: false,
-          role: 'Agent' as const,
-          agencyName: '',
-          licenseNumber: '',
-          specialization: [],
-          socials: { email: user.email || '' }
-        };
-        await setDoc(doc(db, 'agents', user.uid), newAgent);
-      } else {
-        const newUser = {
-          id: user.uid,
-          name: user.displayName || 'Anonymous',
-          avatar: user.photoURL || '',
-          rating: 5.0,
-          reviewCount: 0,
-          location: '',
-          memberSince: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-          bio: '',
-          verified: false,
-          role: 'Tenant' as const,
-          socials: { email: user.email || '' }
-        };
-        await setDoc(doc(db, 'users', user.uid), newUser);
-      }
-    }
-    return Object.assign(user, { isNewAccount: !userDoc.exists() && !agentDoc.exists(), role: selectedRole });
-  } catch (error: any) {
-    if (error?.code === 'auth/popup-closed-by-user') {
-      console.log('Login cancelled by user.');
-    } else {
-      console.error('Login Error:', error);
-    }
-    throw error;
-  }
-};
 
 export const loginWithEmail = async (email: string, password: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
   if (!isConfigValid) {

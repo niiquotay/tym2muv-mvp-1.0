@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { loginWithGoogle, loginWithEmail, signupWithEmail } from '../services/firebaseService';
+import { loginWithEmail, signupWithEmail } from '../services/firebaseService';
 import { useAuth } from '../context/AuthContext';
 import Icon from '../components/Icon';
 import { Logo } from '../components/Logo';
@@ -32,39 +32,6 @@ const SignIn: React.FC = () => {
   // @ts-ignore
   const from = location.state?.from?.pathname || "/";
 
-  const handleGoogleLogin = async () => {
-    setError(null);
-    setMessage(null);
-    setIsLoading(true);
-
-    try {
-      const user = await loginWithGoogle(selectedRole);
-      if (user && user.uid && !user.providerData?.length) {
-        // Mock user
-        setMockUser({
-          id: user.uid,
-          name: user.displayName,
-          avatar: user.photoURL,
-          socials: { email: user.email },
-          role: selectedRole,
-          verified: true
-        });
-      }
-      navigate(from, { replace: true });
-    } catch (err: any) {
-      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
-        // User closed the popup, don't show an ugly error, maybe just leave it blank or a subtle log
-        console.log('User closed popup.');
-      } else if (err?.code === 'auth/unauthorized-domain' || (err?.message && err.message.includes('auth/unauthorized-domain')) || (err?.message && err.message.includes('Cross-Origin-Opener-Policy')) || (err?.message && err.message.includes('Origin not allowed'))) {
-        setError(`Origin not allowed. To fix this, go to your Firebase Console > Authentication > Settings > Authorized domains and add the current URL domain. Or open this app in a new tab to sign in.`);
-      } else {
-        setError('An unexpected error occurred during Google Sign-In. Please try again.');
-        console.error(err);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -417,24 +384,7 @@ const SignIn: React.FC = () => {
                   </form>
                 )}
 
-                <div className="relative my-6">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200"></div>
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white/50 text-slate-500 font-medium font-display">Or continue with</span>
-                  </div>
-                </div>
 
-                <button 
-                  onClick={handleGoogleLogin}
-                  disabled={isLoading}
-                  type="button"
-                  className="w-full bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold py-3.5 rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm hover:shadow-md group disabled:opacity-50"
-                >
-                  <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" referrerPolicy="no-referrer" className="w-6 h-6" />
-                  <span>Google</span>
-                </button>
 
                 <div className="mt-6 text-center space-y-4">
                   <Link 
