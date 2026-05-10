@@ -61,3 +61,8 @@ export async function checkFraudScoring(propertyId: string) {
     property_id: propertyId
   });
 }
+
+export async function logActivity(payload: Record<string, any>) {
+  return invokeEdgeFunction('log-activity', payload);
+}
+
