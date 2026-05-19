@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { updateUserProfile, uploadImage } from '../services/firebaseService';
+import { updateUserProfile, uploadImage } from '../services/supabaseService';
 import Icon from '../components/Icon';
 import { useNavigate } from 'react-router-dom';
 

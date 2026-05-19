@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getListingById, createPayment } from '../services/firebaseService';
+import { getListingById, createPayment } from '../services/supabaseService';
 import { Listing } from '../types';
 import Icon from '../components/Icon';
 import { getSymbolFromCode } from '../services/location';
+import PaystackPop from '@paystack/inline-js';
 
 const PaymentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -13,6 +14,7 @@ const PaymentPage: React.FC = () => {
   const [listing, setListing] = useState<Listing | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showBankDetails, setShowBankDetails] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -28,49 +30,60 @@ const PaymentPage: React.FC = () => {
     fetchListing();
   }, [id, user, navigate]);
 
-  const handleSimulatePayment = async () => {
+  const handlePaystackPayment = () => {
     if (!listing || !user) return;
-    setIsProcessing(true);
     
-    // Simulate real network request to Stripe / Backend
-    setTimeout(async () => {
-      try {
-        await createPayment({
-          userId: user.id,
-          amount: listing.price,
-          currency: listing.currency || 'USD',
-          status: 'completed',
-          createdAt: new Date().toISOString(),
-          purpose: 'listing_fee',
-          referenceId: listing.id,
-          gateway: 'Credit Card'
-        });
-        setIsSuccess(true);
-      } catch (error) {
-        console.error("Payment failed", error);
-        alert("Payment failed. Please try again.");
-      } finally {
-        setIsProcessing(false);
+    const handler = (PaystackPop as any).setup({
+      key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_xxxxxx',
+      email: user.email || 'customer@example.com',
+      amount: listing.price * 100, // Amount in kobo/pesewas
+      currency: listing.currency || 'GHS',
+      ref: `TYM_${Math.floor(Math.random() * 1000000000 + 1)}`,
+      callback: async (response: any) => {
+        setIsProcessing(true);
+        try {
+          await createPayment({
+            userId: user.id,
+            amount: listing.price,
+            currency: listing.currency || 'USD',
+            status: 'completed',
+            createdAt: new Date().toISOString(),
+            purpose: 'listing_fee',
+            referenceId: listing.id,
+            gateway: 'Paystack'
+          });
+          setIsSuccess(true);
+        } catch (error) {
+          console.error("Payment failed", error);
+          alert("Payment was successful but recording failed. Please contact support.");
+        } finally {
+          setIsProcessing(false);
+        }
+      },
+      onClose: () => {
+        alert("Payment cancelled.");
       }
-    }, 2000);
+    });
+
+    handler.openIframe();
   };
 
-  if (!listing) return <div className="p-10 text-center">Loading property...</div>;
+  if (!listing) return <div className="p-10 text-center">Loading secure checkout...</div>;
 
   if (isSuccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full text-center">
-          <div className="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full text-center border border-slate-100">
+          <div className="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
             <Icon name="check" size={40} />
           </div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Payment Successful!</h2>
-          <p className="text-slate-500 mb-8">
-            Your payment for <strong>{listing.title}</strong> has been confirmed.
+          <h2 className="text-2xl font-bold text-slate-900 mb-2 font-display">Payment Successful!</h2>
+          <p className="text-slate-500 mb-8 font-medium">
+            Your payment for <strong className="text-slate-700">{listing.title}</strong> has been confirmed securely.
           </p>
           <button 
             onClick={() => navigate('/')}
-            className="w-full py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all"
+            className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md active:scale-[0.98]"
           >
             Back to Home
           </button>
@@ -80,73 +93,88 @@ const PaymentPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-100">
-        <div className="flex items-center gap-4 mb-8">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50/80 p-4 font-sans">
+      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-2xl shadow-slate-200/50 max-w-md w-full border border-slate-100 relative overflow-hidden">
+        <div className="absolute -top-24 -right-24 w-48 h-48 bg-brand-50 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+        
+        <div className="flex items-center gap-4 mb-6 relative z-10">
           <button onClick={() => navigate(-1)} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-500 transition-all">
             <Icon name="arrowLeft" size={20} />
           </button>
-          <h2 className="text-xl font-bold text-slate-900">Secure Checkout</h2>
+          <h2 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
+             <Icon name="lock" size={18} className="text-brand-500" /> Secure Checkout
+          </h2>
         </div>
 
-        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
+        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-6 relative z-10">
           <div className="flex gap-4 items-center">
-            <img src={listing.images?.[0] || listing.imageUrl} alt={listing.title} className="w-16 h-16 rounded-lg object-cover" />
+            <img src={listing.images?.[0] || listing.imageUrl} alt={listing.title} className="w-16 h-16 rounded-xl object-cover shadow-sm bg-white" />
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-slate-800 truncate">{listing.title}</h3>
-              <p className="text-sm text-slate-500 truncate">{listing.location}</p>
+              <h3 className="font-bold text-slate-800 truncate leading-snug">{listing.title}</h3>
+              <p className="text-xs text-slate-500 truncate mt-0.5">{listing.location}</p>
             </div>
           </div>
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-200">
-            <span className="text-slate-500 font-medium">Total to Pay</span>
-            <span className="text-xl font-black text-brand-600">
+            <span className="text-slate-500 font-medium text-sm">Total to Pay</span>
+            <span className="text-2xl font-black text-slate-900 tracking-tight font-display">
               {getSymbolFromCode(listing.currency || 'USD')}{listing.price.toLocaleString()}
             </span>
           </div>
         </div>
 
-        <div className="space-y-4 mb-8">
-          <div className="p-4 border-2 border-brand-500 bg-brand-50/50 rounded-xl flex items-center justify-between cursor-pointer">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-white rounded shadow-sm flex items-center justify-center text-brand-600">
-                <Icon name="creditCard" size={16} />
-              </div>
-              <span className="font-bold text-slate-700">Credit / Debit Card</span>
-            </div>
-            <div className="w-5 h-5 rounded-full border-4 border-brand-500 bg-white"></div>
-          </div>
-          <div className="p-4 border border-slate-200 hover:border-slate-300 bg-white rounded-xl flex items-center justify-between cursor-pointer transition-all opacity-50">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-slate-50 rounded border border-slate-100 flex items-center justify-center text-slate-400">
-                <span className="font-bold text-xs uppercase">Pay</span>
-              </div>
-              <span className="font-bold text-slate-500">Mobile Money (Coming Soon)</span>
-            </div>
-            <div className="w-5 h-5 rounded-full border-2 border-slate-300"></div>
-          </div>
-        </div>
+        <div className="space-y-4 relative z-10">
+          <button 
+            onClick={handlePaystackPayment}
+            disabled={isProcessing}
+            className="w-full py-4 mt-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-md flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-wait text-sm"
+          >
+            {isProcessing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Processing...
+              </>
+            ) : (
+              <>
+                <Icon name="shieldCheck" size={18} />
+                Pay with Paystack
+              </>
+            )}
+          </button>
 
-        <button 
-          onClick={handleSimulatePayment}
-          disabled={isProcessing}
-          className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
-        >
-          {isProcessing ? (
-            <>
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              Processing...
-            </>
-          ) : (
-            <>
-              Pay {getSymbolFromCode(listing.currency || 'USD')}{listing.price.toLocaleString()}
-              <Icon name="lock" size={16} className="text-slate-400 group-hover:text-white transition-colors" />
-            </>
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200"></div>
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="px-2 bg-white text-slate-400 font-medium uppercase tracking-widest">Or</span>
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => setShowBankDetails(!showBankDetails)}
+            className="w-full py-4 bg-slate-50 text-slate-700 rounded-xl font-bold border border-slate-200 hover:bg-slate-100 transition-all flex items-center justify-center gap-2 text-sm"
+          >
+            <Icon name="creditCard" size={18} />
+            Manual Bank Transfer
+          </button>
+          
+          {showBankDetails && (
+            <div className="mt-4 p-4 rounded-xl border border-blue-100 bg-blue-50 text-sm text-blue-900">
+              <p className="font-bold mb-2">Manual Transfer Details:</p>
+              <p className="mb-1"><strong>Bank:</strong> Guaranty Trust Bank</p>
+              <p className="mb-1"><strong>Account Name:</strong> Tym2Muv LLC</p>
+              <p className="mb-1"><strong>Account No:</strong> 0123456789</p>
+              <p className="mt-3 text-xs text-blue-700">Please include reference: <strong>TYM-{listing.id.substring(0, 5).toUpperCase()}</strong></p>
+            </div>
           )}
-        </button>
-        <p className="text-center text-xs text-slate-400 mt-4 flex items-center justify-center gap-1">
-          <Icon name="shieldCheck" size={12} />
-          Payments are securely simulated for {user?.name}
-        </p>
+        </div>
+        
+        <div className="mt-6 pt-4 border-t border-slate-100 text-center relative z-10">
+           <p className="text-xs text-slate-400 flex items-center justify-center gap-1.5 font-medium">
+             <Icon name="shieldCheck" size={14} className="text-emerald-500" />
+             Payments secured by Paystack
+           </p>
+        </div>
       </div>
     </div>
   );

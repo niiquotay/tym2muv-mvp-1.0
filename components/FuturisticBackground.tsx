@@ -1,6 +1,14 @@
 import React from 'react';
 
 const FuturisticBackground: React.FC = () => {
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (prefersReducedMotion) return null;
+
+  const isLowEnd = typeof navigator !== 'undefined' && navigator.hardwareConcurrency <= 4;
+  if (isLowEnd) {
+    return <div className="fixed inset-0 pointer-events-none z-[-1] bg-gradient-to-br from-slate-50 to-brand-50" />;
+  }
+
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none z-[-1] select-none bg-white">
       {/* Container for 3D perspective */}
@@ -205,18 +213,18 @@ const FuturisticBackground: React.FC = () => {
             90% { opacity: 1; }
             100% { top: 120%; opacity: 0; }
         }
-        .animate-rotate-3d { animation: rotate-3d 20s linear infinite; }
-        .animate-rotate-3d-reverse { animation: rotate-3d-reverse 25s linear infinite; }
-        .animate-rotate-complex { animation: rotate-complex 15s linear infinite; }
-        .animate-rotate-complex-reverse { animation: rotate-complex-reverse 20s linear infinite; }
-        .animate-float-slow { animation: float-slow 15s ease-in-out infinite; }
-        .animate-float-medium { animation: float-medium 18s ease-in-out infinite; }
-        .animate-float-fast { animation: float-fast 12s ease-in-out infinite; }
-        .animate-float-variable { animation: float-variable 25s ease-in-out infinite; }
-        .animate-rise { animation: rise linear infinite; }
-        .animate-spin-slow { animation: spin-slow 10s linear infinite; }
-        .animate-spin-reverse-slow { animation: spin-reverse-slow 15s linear infinite; }
-        .animate-data-stream { animation: data-stream 3s linear infinite; }
+        .animate-rotate-3d { animation: rotate-3d 20s linear infinite; will-change: transform; }
+        .animate-rotate-3d-reverse { animation: rotate-3d-reverse 25s linear infinite; will-change: transform; }
+        .animate-rotate-complex { animation: rotate-complex 15s linear infinite; will-change: transform; }
+        .animate-rotate-complex-reverse { animation: rotate-complex-reverse 20s linear infinite; will-change: transform; }
+        .animate-float-slow { animation: float-slow 15s ease-in-out infinite; will-change: transform; }
+        .animate-float-medium { animation: float-medium 18s ease-in-out infinite; will-change: transform; }
+        .animate-float-fast { animation: float-fast 12s ease-in-out infinite; will-change: transform; }
+        .animate-float-variable { animation: float-variable 25s ease-in-out infinite; will-change: transform; }
+        .animate-rise { animation: rise linear infinite; will-change: transform, opacity; }
+        .animate-spin-slow { animation: spin-slow 10s linear infinite; will-change: transform; }
+        .animate-spin-reverse-slow { animation: spin-reverse-slow 15s linear infinite; will-change: transform; }
+        .animate-data-stream { animation: data-stream 3s linear infinite; will-change: top, opacity; }
       `}</style>
     </div>
   );

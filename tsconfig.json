@@ -12,7 +12,9 @@
     "skipLibCheck": true,
     "types": [
       "node",
-      "jest"
+      "jest",
+      "vite/client",
+      "vitest/globals"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
@@ -26,5 +28,6 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": ["node_modules", "supabase", "dist"]
 }

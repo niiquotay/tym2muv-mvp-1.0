@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { verifyPasswordResetCode, confirmPasswordReset } from '../services/firebaseService';
+import { verifyPasswordResetCode, confirmPasswordReset } from '../services/supabaseService';
 import { Logo } from '../components/Logo';
 
 const ResetPassword = () => {

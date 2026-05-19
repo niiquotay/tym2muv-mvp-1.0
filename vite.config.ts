@@ -1,5 +1,6 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vitest/config';
+import { loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
@@ -34,18 +35,35 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       }
     },
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: ['./vitest.setup.ts'],
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'json', 'html'],
+      },
+    },
     build: {
+      sourcemap: true,
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
-          constants: path.resolve(__dirname, 'constants.ts')
         },
         output: {
-          entryFileNames: (assetInfo) => {
-            if (assetInfo.name === 'constants') {
-              return 'constants.js';
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('@supabase')) {
+                return 'vendor-supabase';
+              }
+              if (id.includes('framer-motion') || id.includes('motion')) {
+                return 'vendor-motion';
+              }
+              if (id.includes('recharts') || id.includes('d3')) {
+                return 'vendor-charts';
+              }
+              // Let Rollup handle the rest (React, etc) to prevent circular dependency warnings and optimize splitting
             }
-            return 'assets/[name]-[hash].js';
           }
         }
       }

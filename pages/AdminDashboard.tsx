@@ -45,7 +45,7 @@ import {
   updateMonetizationAd,
   deleteMonetizationAd,
   uploadImage
-} from '../services/firebaseService';
+} from '../services/supabaseService';
 import { 
   seedMockData, 
   clearMockData 
@@ -66,6 +66,9 @@ const AdminDashboard: React.FC = () => {
   const [showAdModal, setShowAdModal] = useState(false);
   const [editingAd, setEditingAd] = useState<Monetization | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [listingTab, setListingTab] = useState<'all' | 'pending'>('all');
+
+  const pendingCount = listings.filter(l => l.status === 'pending').length;
 
   useEffect(() => {
     fetchData();
@@ -154,6 +157,16 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleApproveListing = async (id: string) => {
+    await updateListing(id, { status: 'active' });
+    fetchData();
+  };
+
+  const handleRejectListing = async (id: string) => {
+    await updateListing(id, { status: 'rejected' });
+    fetchData();
+  };
+
   const handleToggleListingStatus = async (id: string, currentStatus: string | undefined) => {
     const newStatus = currentStatus === 'pending' ? 'active' : currentStatus === 'active' ? 'rejected' : 'active';
     await updateListing(id, { status: newStatus });
@@ -166,8 +179,9 @@ const AdminDashboard: React.FC = () => {
   );
 
   const filteredListings = listings.filter(l => 
-    l.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    l.location.toLowerCase().includes(searchTerm.toLowerCase())
+    (l.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    l.location.toLowerCase().includes(searchTerm.toLowerCase())) &&
+    (listingTab === 'all' || l.status === 'pending')
   );
 
   if (loading && !stats) {
@@ -461,11 +475,32 @@ const AdminDashboard: React.FC = () => {
               key="listings"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+              className="space-y-6"
             >
+              <div className="flex gap-4 border-b border-gray-200 pb-2">
+                <button 
+                  onClick={() => setListingTab('all')}
+                  className={`pb-2 border-b-2 font-medium text-sm transition-colors ${listingTab === 'all' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                >
+                  All Listings
+                </button>
+                <button 
+                  onClick={() => setListingTab('pending')}
+                  className={`pb-2 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${listingTab === 'pending' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                >
+                  Pending Approvals
+                  {pendingCount > 0 && (
+                    <span className="bg-orange-100 text-orange-600 text-xs px-2 py-0.5 rounded-full font-bold">
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredListings.map(listing => (
-                <div key={listing.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden group">
-                  <div className="relative h-48">
+                <div key={listing.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden group flex flex-col">
+                  <div className="relative h-48 flex-shrink-0">
                     <img src={listing.imageUrl} alt="" className="w-full h-full object-cover" />
                     <div className="absolute top-4 right-4 flex gap-2">
                       <button 
@@ -481,39 +516,55 @@ const AdminDashboard: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="p-4">
+                  <div className="flex flex-col flex-1 p-4">
                     <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">{listing.title}</h3>
                     <div className="flex items-center gap-2 text-gray-500 text-sm mb-4">
                       <TrendingUp size={14} />
                       <span>{listing.type} • {listing.propertyType}</span>
                     </div>
-                    <div className="flex justify-between items-center pt-4 border-t border-gray-50">
-                      <button 
-                        onClick={() => handleToggleListingStatus(listing.id, listing.status)}
-                        className={`flex items-center gap-2 px-2 py-1 rounded border transition-colors ${
-                          !listing.status || listing.status === 'active' 
-                          ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' 
-                          : listing.status === 'pending'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                          : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                        }`}
-                      >
-                        <div className={`w-2 h-2 rounded-full ${
-                          !listing.status || listing.status === 'active' ? 'bg-green-500' 
-                          : listing.status === 'pending' ? 'bg-amber-500' 
-                          : 'bg-red-500'
-                        }`}></div>
-                        <span className="text-xs font-bold uppercase tracking-wider">
-                          {!listing.status ? 'ACTIVE' : listing.status}
-                        </span>
-                      </button>
-                      <button className="text-orange-600 text-sm font-bold flex items-center gap-1 hover:underline">
-                        View Details <ArrowRight size={14} />
+                    
+                    <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between">
+                      {listing.status === 'pending' ? (
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => handleApproveListing(listing.id)}
+                            className="bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-200"
+                          >
+                            Approve
+                          </button>
+                          <button 
+                            onClick={() => handleRejectListing(listing.id)}
+                            className="bg-red-100 text-red-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-200"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => handleToggleListingStatus(listing.id, listing.status)}
+                          className={`flex items-center gap-2 px-2 py-1 rounded border transition-colors ${
+                            !listing.status || listing.status === 'active' 
+                            ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' 
+                            : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                          }`}
+                        >
+                          <div className={`w-2 h-2 rounded-full ${
+                            !listing.status || listing.status === 'active' ? 'bg-green-500' : 'bg-red-500'
+                          }`}></div>
+                          <span className="text-xs font-bold uppercase tracking-wider">
+                            {!listing.status ? 'ACTIVE' : listing.status}
+                          </span>
+                        </button>
+                      )}
+                      
+                      <button className="text-orange-600 text-sm font-bold flex flex-shrink-0 items-center gap-1 hover:underline ml-2">
+                        View <ArrowRight size={14} />
                       </button>
                     </div>
                   </div>
                 </div>
               ))}
+              </div>
             </motion.div>
           )}
 

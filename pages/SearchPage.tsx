@@ -1,17 +1,20 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import ListingCard from '../components/ListingCard';
 import AdCard from '../components/AdCard';
-import { getListings } from '../services/firebaseService';
+import { getListings } from '../services/supabaseService';
 import Icon from '../components/Icon';
 import { useLocation as useAppLocation } from '../context/LocationContext';
+import { useMixedContent } from '../hooks/useMixedContent';
+import ErrorBanner from '../components/ErrorBanner';
 
 const ITEMS_PER_BATCH = 24; 
 
 const SearchPage: React.FC = () => {
   const { location: userLocation } = useAppLocation();
   const location = useLocation();
+  const navigate = useNavigate();
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const query = searchParams.get('q') || '';
   
@@ -21,13 +24,39 @@ const SearchPage: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const [page, setPage] = useState(1);
 
-  // Filters State
-  const [filters, setFilters] = useState<any>({
-    propertyType: searchParams.get('propertyType') || 'Property Type',
-    bedrooms: searchParams.get('bedrooms') || 'Beds',
-    bathrooms: searchParams.get('bathrooms') || 'Baths',
-    priceRange: searchParams.get('minPrice') ? `$${searchParams.get('minPrice')} - $${searchParams.get('maxPrice') || '10000+'}` : 'Price Range'
-  });
+  const handleFilterChange = (field: string, value: string) => {
+    const params = new URLSearchParams(location.search);
+    
+    if (field === 'priceRange') {
+        if (!value || value === 'Price Range') {
+            params.delete('minPrice');
+            params.delete('maxPrice');
+        } else if (value === '$10,000+') {
+            params.set('minPrice', '10000');
+            params.delete('maxPrice');
+        } else {
+            const parts = value.replace(/\$/g, '').replace(/,/g, '').split(' - ');
+            if (parts.length === 2) {
+                params.set('minPrice', parts[0]);
+                params.set('maxPrice', parts[1]);
+            }
+        }
+    } else {
+        if (value && value !== 'Beds' && value !== 'Baths' && value !== 'Property Type') {
+            // Remove + from strings like "1+ Beds" to just store "1", wait, "1+ Beds" is what value is, wait no, let's just use exact match or remove ' Beds' ' Baths'
+            let paramValue = value.replace('+', '').replace(' Beds', '').replace(' Baths', '');
+            params.set(field, paramValue);
+        } else {
+            params.delete(field);
+        }
+    }
+    
+    if (query && !params.has('location') && !['real-estate', 'jobs', 'vehicles', 'services'].includes(query.toLowerCase())) {
+        params.set('location', query);
+    }
+    
+    navigate(`/search?${params.toString()}`, { replace: true });
+  };
 
   // Define country-specific ads
   const ads = useMemo(() => {
@@ -53,30 +82,16 @@ const SearchPage: React.FC = () => {
   }, [userLocation]);
 
   // Mix listings and ads
-  const mixedContent = useMemo(() => {
-    const result: { type: 'listing' | 'ad', data: any }[] = [];
-    let adCount = 0;
-    
-    // Interval for "after every 2 rows" (assuming ~5 columns per row, so 10 items)
-    const interval = 10;
-    
-    listings.forEach((listing, index) => {
-      result.push({ type: 'listing' as const, data: listing });
-      
-      // After every 10 listings, insert an ad
-      if ((index + 1) % interval === 0 && adCount < 10) { 
-        result.push({ type: 'ad' as const, data: ads[adCount % ads.length] });
-        adCount++;
-      }
-    });
-    
-    return result;
-  }, [listings, ads]);
+  const mixedContent = useMixedContent(listings, ads, 10, 10, false);
+
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   // Reset and load initial batch when query or country changes
   useEffect(() => {
     const fetchInitialListings = async () => {
       setIsLoading(true);
+      setError(null);
       try {
         const initialFilters: any = {
           page: 1,
@@ -98,20 +113,22 @@ const SearchPage: React.FC = () => {
         if (searchParams.has('propertyType')) initialFilters.propertyType = searchParams.get('propertyType');
         if (searchParams.has('minPrice')) initialFilters.minPrice = searchParams.get('minPrice');
         if (searchParams.has('maxPrice')) initialFilters.maxPrice = searchParams.get('maxPrice');
+        if (searchParams.has('bedrooms')) initialFilters.bedrooms = searchParams.get('bedrooms');
 
         const { listings: fetchedListings, total } = await getListings(initialFilters);
         setListings(fetchedListings);
         setTotalItems(total);
         setPage(1);
-      } catch (error) {
-        console.error("Error fetching search results:", error);
+      } catch (err) {
+        console.error("Error fetching search results:", err);
+        setError('Failed to load listings. Please check your connection.');
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchInitialListings();
-  }, [query, userLocation.countryCode]);
+  }, [query, userLocation.countryCode, location.search, retryKey]);
 
   const handleLoadMore = async () => {
     if (isLoading || listings.length >= totalItems) return;
@@ -148,13 +165,31 @@ const SearchPage: React.FC = () => {
           <p className="text-slate-500">Find your perfect home from our verified listings.</p>
         </div>
 
+        {/* Popular Search Trends */}
+        <div className="w-full flex items-center gap-2 overflow-x-auto pb-4 mb-2 scrollbar-none">
+             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 shrink-0">Popular:</span>
+             {['East Legon', 'Cantonments', '2 Bedroom', 'Apartment', 'Under $2k'].map(trend => (
+               <button 
+                 key={trend}
+                 onClick={() => {
+                   const newSearchParams = new URLSearchParams(searchParams);
+                   newSearchParams.set('q', trend);
+                   navigate(`${location.pathname}?${newSearchParams.toString()}`);
+                 }}
+                 className="shrink-0 px-3 py-1.5 bg-brand-100 text-brand-700 rounded-full text-xs font-bold hover:bg-brand-200 transition-colors"
+               >
+                 {trend}
+               </button>
+             ))}
+        </div>
+
         {/* Real Estate Filters */}
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-8 flex flex-wrap gap-4 items-center">
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="bed" size={16} className="text-slate-400" />
             <select 
-               value={filters.bedrooms} 
-               onChange={e => setFilters({...filters, bedrooms: e.target.value})}
+               value={searchParams.get('bedrooms') ? `${searchParams.get('bedrooms')}+ Beds` : 'Beds'} 
+               onChange={e => handleFilterChange('bedrooms', e.target.value)}
                className="bg-transparent text-sm font-medium text-slate-700 outline-none"
             >
               <option>Beds</option>
@@ -167,8 +202,8 @@ const SearchPage: React.FC = () => {
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="bath" size={16} className="text-slate-400" />
             <select 
-              value={filters.bathrooms}
-              onChange={e => setFilters({...filters, bathrooms: e.target.value})}
+              value={searchParams.get('bathrooms') ? `${searchParams.get('bathrooms')}+ Baths` : 'Baths'}
+              onChange={e => handleFilterChange('bathrooms', e.target.value)}
               className="bg-transparent text-sm font-medium text-slate-700 outline-none"
             >
               <option>Baths</option>
@@ -180,8 +215,8 @@ const SearchPage: React.FC = () => {
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="home" size={16} className="text-slate-400" />
             <select 
-               value={filters.propertyType}
-               onChange={e => setFilters({...filters, propertyType: e.target.value})}
+               value={searchParams.get('propertyType') || 'Property Type'}
+               onChange={e => handleFilterChange('propertyType', e.target.value)}
                className="bg-transparent text-sm font-medium text-slate-700 outline-none"
             >
               <option>Property Type</option>
@@ -194,8 +229,14 @@ const SearchPage: React.FC = () => {
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="dollarSign" size={16} className="text-slate-400" />
             <select 
-               value={filters.priceRange}
-               onChange={e => setFilters({...filters, priceRange: e.target.value})}
+               value={
+                 searchParams.get('minPrice') 
+                   ? searchParams.get('maxPrice') 
+                     ? `$${searchParams.get('minPrice')} - $${searchParams.get('maxPrice')}`
+                     : '$10,000+'
+                   : 'Price Range'
+               }
+               onChange={e => handleFilterChange('priceRange', e.target.value)}
                className="bg-transparent text-sm font-medium text-slate-700 outline-none"
             >
               <option>Price Range</option>
@@ -205,45 +246,6 @@ const SearchPage: React.FC = () => {
               <option>$10,000+</option>
             </select>
           </div>
-          <button 
-             onClick={() => {
-                const newSearchParams = new URLSearchParams(searchParams);
-                if (filters.propertyType && filters.propertyType !== 'Property Type') newSearchParams.set('propertyType', filters.propertyType);
-                else newSearchParams.delete('propertyType');
-                
-                if (filters.bedrooms && filters.bedrooms !== 'Beds') newSearchParams.set('bedrooms', filters.bedrooms.replace('+', ''));
-                else newSearchParams.delete('bedrooms');
-                
-                if (filters.priceRange && filters.priceRange !== 'Price Range') {
-                    if (filters.priceRange === '$10,000+') {
-                        newSearchParams.set('minPrice', '10000');
-                        newSearchParams.delete('maxPrice');
-                    } else {
-                        const parts = filters.priceRange.replace(/\$/g, '').replace(/,/g, '').split(' - ');
-                        if (parts.length === 2) {
-                            newSearchParams.set('minPrice', parts[0]);
-                            newSearchParams.set('maxPrice', parts[1]);
-                        }
-                    }
-                } else {
-                    newSearchParams.delete('minPrice');
-                    newSearchParams.delete('maxPrice');
-                }
-                
-                // Keep location logic if it was set
-                if (query && !newSearchParams.has('location')) newSearchParams.set('location', query);
-                
-                // Update history to trigger re-fetch
-                window.history.replaceState({}, '', `${window.location.pathname}?${newSearchParams.toString()}`);
-                
-                // For simplicity, force reload for now to apply filters
-                window.location.reload();
-             }}
-             className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-xl text-sm font-bold hover:bg-brand-600 transition-colors"
-          >
-            <Icon name="search" size={16} />
-            Apply Filters
-          </button>
         </div>
         
         {/* Listings Section */}
@@ -251,24 +253,40 @@ const SearchPage: React.FC = () => {
            <p className="text-slate-500 font-medium text-sm">Showing {displayListings.length} results</p>
         </div>
            
-        {/* Grid */}
-        <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
-           {mixedContent.map((item, idx) => (
-              item.type === 'listing' ? (
-                <ListingCard key={item.data.id} listing={item.data} />
-              ) : (
-                <AdCard 
-                  key={`ad-${idx}`} 
-                  type={item.data.type}
-                  title={item.data.title}
-                  description={item.data.description}
-                  cta={item.data.cta}
-                  image={item.data.image}
-                  color={item.data.color}
-                />
-              )
-           ))}
-        </div>
+        {error ? (
+           <ErrorBanner message={error} onRetry={() => setRetryKey(k => k + 1)} />
+        ) : (
+          <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
+             {isLoading && page === 1 ? (
+             Array.from({ length: 12 }).map((_, idx) => (
+               <div key={`skeleton-${idx}`} className="w-full bg-slate-100 rounded-xl aspect-[3/4] animate-pulse">
+                  <div className="w-full h-[60%] bg-slate-200 rounded-t-xl mb-2"></div>
+                  <div className="p-2 w-full h-[40%] flex flex-col gap-2">
+                     <div className="w-3/4 h-3 bg-slate-200 rounded-full"></div>
+                     <div className="w-1/2 h-3 bg-slate-200 rounded-full"></div>
+                     <div className="mt-auto w-1/3 h-4 bg-slate-200 rounded-full"></div>
+                  </div>
+               </div>
+             ))
+           ) : (
+             mixedContent.map((item, idx) => (
+                item.type === 'listing' ? (
+                  <ListingCard key={item.data.id} listing={item.data} />
+                ) : (
+                  <AdCard 
+                    key={`ad-${idx}`} 
+                    type={item.data.type}
+                    title={item.data.title}
+                    description={item.data.description}
+                    cta={item.data.cta}
+                    image={item.data.image}
+                    color={item.data.color}
+                  />
+                )
+             ))
+           )}
+          </div>
+        )}
            
         {/* Load More Button */}
         <div className="mt-12 flex justify-center">

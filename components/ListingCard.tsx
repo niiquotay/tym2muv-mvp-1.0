@@ -2,8 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Listing } from '../types';
-import { getUser } from '../services/mockData';
+import { Listing, User } from '../types';
 import { CATEGORIES } from '../constants';
 import Icon from './Icon';
 import { generateListingTitle } from '../utils/listingUtils';
@@ -11,14 +10,35 @@ import { useAuth } from '../context/AuthContext';
 import { getSymbolFromCode } from '../services/location';
 
 interface ListingCardProps {
-  listing: Listing;
+  listing?: Listing;
+  seller?: User;
+  isLoading?: boolean;
 }
 
-const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
+const ListingCard: React.FC<ListingCardProps> = ({ listing, seller, isLoading }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const seller = getUser(listing.sellerId);
   
+  if (isLoading || !listing) {
+    return (
+      <div className="w-full h-full bg-white rounded-xl shadow-sm flex flex-col ring-1 ring-slate-100 overflow-hidden animate-pulse">
+        <div className="aspect-[3/2] bg-slate-200" />
+        <div className="p-3">
+          <div className="h-4 bg-slate-200 rounded w-3/4 mb-2" />
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            <div className="h-4 bg-slate-200 rounded w-full" />
+            <div className="h-4 bg-slate-200 rounded w-full" />
+            <div className="h-4 bg-slate-200 rounded w-full" />
+            <div className="h-4 bg-slate-200 rounded w-full" />
+          </div>
+        </div>
+        <div className="mt-auto p-3 border-t border-slate-100 bg-slate-50/80">
+          <div className="h-4 bg-slate-200 rounded w-1/3" />
+        </div>
+      </div>
+    );
+  }
+
   const isOwner = user?.id === listing.sellerId;
 
   const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&h=600&fit=crop';
@@ -91,11 +111,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
   const handleChat = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if(seller) {
-        navigate(`/chat?to=${seller.id}`);
-    } else {
-        navigate('/signin');
-    }
+    navigate(`/chat?to=${listing.sellerId}`);
   };
 
   const CardFace = ({ imageIndex, isBack = false }: { imageIndex: number; isBack?: boolean }) => (

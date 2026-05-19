@@ -1,9 +1,18 @@
-import { GoogleGenAI, Type } from "@google/genai";
+let aiInstance: any = null;
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const getAiInstance = async () => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY;
+  if (!apiKey) throw new Error('Gemini API key not configured. Set VITE_GEMINI_API_KEY.');
+  if (!aiInstance) {
+    const { GoogleGenAI } = await import('@google/genai');
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+};
 
 export const generateAdDescription = async (details: any): Promise<string> => {
   try {
+    const ai = await getAiInstance();
     const prompt = `Write a compelling, professional, and detailed real estate listing description based on the following details:
     - Property Type: ${details.propertyType}
     - Listing Type: ${details.type}
@@ -19,7 +28,7 @@ export const generateAdDescription = async (details: any): Promise<string> => {
     The description should be engaging, highlight the key features, and appeal to potential ${details.type === 'Rent' ? 'tenants' : 'buyers'}. Keep it under 150 words.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: prompt,
     });
 
@@ -32,6 +41,7 @@ export const generateAdDescription = async (details: any): Promise<string> => {
 
 export const suggestPriceRange = async (details: any): Promise<{ min: number; max: number } | null> => {
   try {
+    const ai = await getAiInstance();
     const prompt = `Based on the following real estate property details, suggest a realistic price range in ${details.currency}.
     - Property Type: ${details.propertyType}
     - Listing Type: ${details.type}
@@ -42,8 +52,10 @@ export const suggestPriceRange = async (details: any): Promise<{ min: number; ma
     
     Return ONLY a JSON object with 'min' and 'max' numeric properties representing the suggested price range.`;
 
+    const { Type } = await import('@google/genai');
+
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -70,8 +82,9 @@ export const suggestPriceRange = async (details: any): Promise<{ min: number; ma
 
 export const enhanceImage = async (base64Image: string, mimeType: string): Promise<string | null> => {
   try {
+    const ai = await getAiInstance();
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-2.0-flash-preview-image-generation',
       contents: {
         parts: [
           {

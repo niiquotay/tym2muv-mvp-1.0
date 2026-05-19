@@ -3,9 +3,8 @@
  * Provides utilities for input sanitization, secure data handling, and validation.
  */
 
-// Simple obfuscation key - in a real app, this would be more complex and potentially rotated
+// Simple namespace for local storage
 const STORAGE_KEY_PREFIX = 't2m_';
-const OBFUSCATION_SECRET = 'tym2muv_secure_layer_2024';
 
 /**
  * Basic sanitization for user-provided strings to prevent XSS.
@@ -22,51 +21,23 @@ export function sanitizeString(str: string): string {
 }
 
 /**
- * Simple obfuscation for data stored in localStorage.
- * Note: This is NOT strong encryption, but prevents casual snooping.
+ * App Storage Wrapper
+ * Provides a consistent interface for storing non-sensitive app settings.
  */
-function obfuscate(data: string): string {
-  try {
-    const combined = `${OBFUSCATION_SECRET}:${data}`;
-    return btoa(combined);
-  } catch (e) {
-    return data;
-  }
-}
-
-function deobfuscate(data: string): string | null {
-  try {
-    const decoded = atob(data);
-    if (decoded.startsWith(`${OBFUSCATION_SECRET}:`)) {
-      return decoded.substring(OBFUSCATION_SECRET.length + 1);
-    }
-    return null;
-  } catch (e) {
-    return null;
-  }
-}
-
-/**
- * Secure Storage Wrapper
- * Provides a consistent interface for storing data with basic obfuscation.
- */
-export const secureStorage = {
+export const appStorage = {
   setItem: (key: string, value: string) => {
     try {
-      const obfuscatedValue = obfuscate(value);
-      localStorage.setItem(`${STORAGE_KEY_PREFIX}${key}`, obfuscatedValue);
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}${key}`, value);
     } catch (e) {
-      console.error('Error saving to secureStorage:', e);
+      console.error('Error saving to appStorage:', e);
     }
   },
   
   getItem: (key: string): string | null => {
     try {
-      const value = localStorage.getItem(`${STORAGE_KEY_PREFIX}${key}`);
-      if (!value) return null;
-      return deobfuscate(value);
+      return localStorage.getItem(`${STORAGE_KEY_PREFIX}${key}`);
     } catch (e) {
-      console.error('Error reading from secureStorage:', e);
+      console.error('Error reading from appStorage:', e);
       return null;
     }
   },
@@ -75,7 +46,7 @@ export const secureStorage = {
     try {
       localStorage.removeItem(`${STORAGE_KEY_PREFIX}${key}`);
     } catch (e) {
-      console.error('Error removing from secureStorage:', e);
+      console.error('Error removing from appStorage:', e);
     }
   },
   
@@ -88,7 +59,7 @@ export const secureStorage = {
         }
       });
     } catch (e) {
-      console.error('Error clearing secureStorage:', e);
+      console.error('Error clearing appStorage:', e);
     }
   }
 };

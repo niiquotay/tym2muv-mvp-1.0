@@ -5,16 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@google/genai": "^1.35.0",
+    "@paystack/inline-js": "^2.22.8",
+    "@supabase/supabase-js": "^2.105.4",
     "@tailwindcss/postcss": "^4.2.1",
     "@tailwindcss/vite": "^4.0.0",
     "clsx": "^2.1.1",
-    "firebase": "^12.11.0",
     "framer-motion": "^12.36.0",
     "lucide-react": "^0.577.0",
     "motion": "^12.38.0",
@@ -26,12 +30,14 @@
     "tailwindcss": "^4.0.0"
   },
   "devDependencies": {
-    "@firebase/eslint-plugin-security-rules": "^0.0.1",
-    "@firebase/rules-unit-testing": "^5.0.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^29.1.1",
     "typescript": "~5.7.2",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^3.2.4"
   }
 }

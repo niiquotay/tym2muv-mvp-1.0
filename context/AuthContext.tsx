@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User as FirebaseUser } from 'firebase/auth';
 import { User } from '../types';
-import { subscribeToAuth, getUserProfile, logout as firebaseLogout } from '../services/firebaseService';
-import { isConfigValid } from '../firebase';
+import { subscribeToAuth, getUserProfile, logout as backendLogout, isConfigValid } from '../services/supabaseService';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
-  firebaseUser: FirebaseUser | null;
+  supabaseUser: SupabaseUser | null;
   loading: boolean;
   isAuthReady: boolean;
   isAuthenticated: boolean;
@@ -18,14 +17,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   // Expose a way to manually set user for mock mode
   const setMockUser = (mockUser: User | null) => {
     setUser(mockUser);
-    setFirebaseUser(mockUser ? { uid: mockUser.id, email: mockUser.socials.email } as any : null);
+    setSupabaseUser(mockUser ? { id: mockUser.id, email: mockUser.socials.email } as any : null);
     if (mockUser) {
       localStorage.setItem('mockUser', JSON.stringify(mockUser));
     } else {
@@ -38,11 +37,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setMockUser(null);
       return;
     }
-    await firebaseLogout();
+    await backendLogout();
   };
 
   useEffect(() => {
-    const unsubscribe = subscribeToAuth(async (fUser) => {
+    const unsubscribe = subscribeToAuth(async (sUser) => {
       if (!isConfigValid) {
         // In mock mode, check localStorage for persisted mock user
         const storedMockUser = localStorage.getItem('mockUser');
@@ -50,23 +49,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const parsedUser = JSON.parse(storedMockUser);
             setUser(parsedUser);
-            setFirebaseUser({ uid: parsedUser.id, email: parsedUser.socials.email } as any);
+            setSupabaseUser({ id: parsedUser.id, email: parsedUser.socials.email } as any);
           } catch (e) {
             setUser(null);
-            setFirebaseUser(null);
+            setSupabaseUser(null);
           }
         } else {
           setUser(null);
-          setFirebaseUser(null);
+          setSupabaseUser(null);
         }
         setLoading(false);
         setIsAuthReady(true);
         return;
       }
 
-      setFirebaseUser(fUser);
-      if (fUser) {
-        const profile = await getUserProfile(fUser.uid);
+      setSupabaseUser(sUser);
+      if (sUser) {
+        const profile = await getUserProfile(sUser.id);
         setUser(profile);
       } else {
         setUser(null);
@@ -81,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, isAuthReady, isAuthenticated, setMockUser, logout }}>
+    <AuthContext.Provider value={{ user, supabaseUser, loading, isAuthReady, isAuthenticated, setMockUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

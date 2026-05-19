@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getUserProfile, getListings, getReviewsForVendor, createReview } from '../services/firebaseService';
+import { getUserProfile, getListings, getReviewsForVendor, createReview } from '../services/supabaseService';
 import { User, Listing, Review } from '../types';
 import ListingCard from '../components/ListingCard';
 import AdCard from '../components/AdCard';
 import Icon from '../components/Icon';
+import AgentMonetizationDash from '../components/AgentMonetizationDash';
 import { useAuth } from '../context/AuthContext';
+import { useMixedContent } from '../hooks/useMixedContent';
 
 const Profile: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -35,25 +37,7 @@ const Profile: React.FC = () => {
   ];
 
   // Mix listings and ads
-  const mixedContent = useMemo(() => {
-    const result: { type: 'listing' | 'ad', data: any }[] = [];
-    let adCount = 0;
-    
-    // Interval for "after every 2 rows" (assuming ~3-4 columns per row on profile, so 8 items)
-    const interval = 8;
-    
-    listings.forEach((listing, index) => {
-      result.push({ type: 'listing' as const, data: listing });
-      
-      // After every 8 listings, insert an ad
-      if ((index + 1) % interval === 0 && adCount < 5) { // Limit ads on profile
-        result.push({ type: 'ad' as const, data: ads[adCount % ads.length] });
-        adCount++;
-      }
-    });
-    
-    return result;
-  }, [listings]);
+  const mixedContent = useMixedContent(listings, ads, 8, 5, false);
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -295,6 +279,14 @@ const Profile: React.FC = () => {
                           Properties ({listings.length})
                       </button>
                     )}
+                    {user.role === 'Agent' && isMe ? (
+                      <button 
+                         onClick={() => setActiveTab('pro')}
+                         className={`pb-4 px-2 font-bold text-sm uppercase tracking-wider transition-all border-b-2 ${activeTab === 'pro' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-400 hover:text-slate-600'} flex items-center gap-1.5`}
+                      >
+                          <Icon name="zap" size={16} className={activeTab === 'pro' ? 'text-brand-500' : 'text-slate-400'} /> Agent Pro
+                      </button>
+                    ) : null}
                     <button 
                        onClick={() => setActiveTab('reviews')}
                        className={`pb-4 px-2 font-bold text-sm uppercase tracking-wider transition-all border-b-2 ${activeTab === 'reviews' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
@@ -332,6 +324,8 @@ const Profile: React.FC = () => {
                         <p className="text-slate-500 mt-1">This agent hasn't posted any properties yet.</p>
                     </div>
                 )
+            ) : activeTab === 'pro' ? (
+                 <AgentMonetizationDash />
             ) : activeTab === 'saved' ? (
                 savedListings.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">

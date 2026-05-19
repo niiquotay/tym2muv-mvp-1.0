@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const supabase = createClient(
+const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
@@ -16,6 +16,25 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // 1. Verify User Authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized request" }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { agent_id, plan, amount } = await req.json();
 
     if (!agent_id || !plan) {
@@ -25,14 +44,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Process payment via Stripe or Paystack (MOCKED)
+    // Security Check: Only the authenticated user can upgrade their own agent account
+    // Or if the user is a super admin
+    if (user.id !== agent_id && user.user_metadata?.role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: Cannot alter another user's subscription" }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 2. Process payment via Stripe or Paystack (MOCKED)
     console.log(`Processing payment of ${amount} for plan ${plan}`);
 
-    // 2. Update agent subscription tier securely
+    // 3. Update agent subscription tier securely bypassing RLS (since we already authorized)
     const expiryDate = new Date();
     expiryDate.setMonth(expiryDate.getMonth() + 1);
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('agents')
       .update({
         subscription_plan: plan,

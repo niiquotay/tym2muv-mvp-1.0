@@ -16,6 +16,9 @@ import InteractiveAdBanner from './InteractiveAdBanner';
 
 import CountrySelector from './CountrySelector';
 
+import NotificationDropdown from './NotificationDropdown';
+import MobileBottomNav from './MobileBottomNav';
+
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -196,6 +199,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                             <Icon name="settings" size={20} className="sm:w-[22px] sm:h-[22px]" />
                           </Link>
                         )}
+                        {user?.role === 'Agent' && (
+                          <Link to="/agent-dashboard" className="p-1.5 sm:p-2 text-brand-600 hover:bg-brand-50 rounded-full transition-all group" title="Agent Dashboard">
+                            <Icon name="layout" size={20} className="sm:w-[22px] sm:h-[22px]" />
+                          </Link>
+                        )}
+                        <NotificationDropdown />
                         <Link to="/chat" className="p-1.5 sm:p-2 text-slate-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-all relative group">
                         <Icon name="messageCircle" size={20} className="sm:w-[22px] sm:h-[22px]" />
                         <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-red-500 border border-white rounded-full"></span>
@@ -277,7 +286,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         href="https://wa.me/233530483353" 
         target="_blank" 
         rel="noopener noreferrer" 
-        className="fixed bottom-6 right-6 z-50 bg-[#25D366] text-white p-4 rounded-full shadow-lg shadow-[#25D366]/30 hover:bg-[#128C7E] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex items-center justify-center group"
+        className="fixed bottom-24 md:bottom-6 right-6 z-50 bg-[#25D366] text-white p-4 rounded-full shadow-lg shadow-[#25D366]/30 hover:bg-[#128C7E] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex items-center justify-center group"
         aria-label="Chat with us on WhatsApp"
       >
         <Icon name="whatsapp" size={28} />
@@ -286,6 +295,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="absolute top-1/2 -right-1 -translate-y-1/2 border-t-4 border-b-4 border-l-4 border-transparent border-l-slate-800"></div>
         </span>
       </a>
+
+      <MobileBottomNav />
     </div>
   );
 };

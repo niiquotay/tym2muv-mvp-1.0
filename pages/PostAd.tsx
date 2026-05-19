@@ -5,7 +5,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import LocationSelect from '../components/LocationSelect';
 import { generateListingTitle } from '../utils/listingUtils';
 import { sanitizeString } from '../services/security';
-import { getListingById, updateListing, createListing, uploadImage } from '../services/firebaseService';
+import { getListingById, updateListing, createListing, uploadImage } from '../services/supabaseService';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
 import { getSymbolFromCode } from '../services/location';
@@ -50,12 +50,7 @@ const PostAd: React.FC = () => {
   const [imageFiles, setImageFiles] = useState<File[]>([]); // Local files for upload
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Security check for role
-  useEffect(() => {
-    if (user && user.role !== 'Agent' && user.role !== 'Admin') {
-      navigate('/');
-    }
-  }, [user, navigate]);
+
 
   // Load listing if editing
   useEffect(() => {
@@ -190,18 +185,29 @@ const PostAd: React.FC = () => {
     }
   };
 
+  const [uploadProgress, setUploadProgress] = useState<{current: number, total: number, percent: number} | null>(null);
+
   const handlePublish = async () => {
     if (!user) return;
     setIsSubmitting(true);
+    setUploadProgress(null);
 
     try {
       // 1. Upload new images if any
       const uploadedUrls: string[] = [...images.filter(img => img.startsWith('http'))];
       
+      let currentFile = 1;
+      const totalFiles = imageFiles.length;
+      
       for (const file of imageFiles) {
-        const url = await uploadImage(file, `listings/${user.id}/${Date.now()}_${file.name}`);
+        setUploadProgress({ current: currentFile, total: totalFiles, percent: 0 });
+        const url = await uploadImage(file, `listings/${user.id}/${Date.now()}_${file.name}`, (percent) => {
+            setUploadProgress({ current: currentFile, total: totalFiles, percent });
+        });
         uploadedUrls.push(url);
+        currentFile++;
       }
+      setUploadProgress(null);
 
       const listingData = {
         ...formData,
@@ -233,23 +239,44 @@ const PostAd: React.FC = () => {
       alert("Failed to publish ad. Please try again.");
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files) as File[];
-      setImageFiles(prev => [...prev, ...files]);
       
-      files.forEach((file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            if (reader.result) {
-                setImages(prev => [...prev, reader.result as string]);
-            }
-        };
-        reader.readAsDataURL(file);
-      });
+      const MAX_SIZE_MB = 5;
+      const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+      const validFiles: File[] = [];
+
+      for (const file of files) {
+        if (!ALLOWED_TYPES.includes(file.type)) {
+          alert(`${file.name} is not a supported format. Use JPG, PNG, or WebP.`);
+          continue;
+        }
+        if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+          alert(`${file.name} exceeds ${MAX_SIZE_MB}MB. Please compress the image.`);
+          continue;
+        }
+        validFiles.push(file);
+      }
+
+      if (validFiles.length > 0) {
+          setImageFiles(prev => [...prev, ...validFiles]);
+          
+          validFiles.forEach((file: File) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                if (reader.result) {
+                    setImages(prev => [...prev, reader.result as string]);
+                }
+            };
+            reader.readAsDataURL(file);
+          });
+      }
     }
   };
 
@@ -616,20 +643,38 @@ const PostAd: React.FC = () => {
                 </div>
               )}
 
-               <div className="flex justify-between pt-8 border-t border-slate-100">
+               <div className="flex justify-between pt-8 border-t border-slate-100 relative">
                   <button onClick={() => setStep(2)} className="text-slate-500 hover:text-slate-900 font-medium px-4 py-2">Back</button>
-                  <button 
-                    onClick={handlePublish}
-                    disabled={images.length === 0 || isSubmitting}
-                    className={`bg-brand-600 text-white px-10 py-4 rounded-xl font-bold hover:bg-brand-700 shadow-xl shadow-brand-500/30 transform hover:-translate-y-0.5 transition-all flex items-center gap-2 ${(images.length === 0 || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                     {isSubmitting ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                     ) : (
-                        <Icon name="check" size={20} />
-                     )}
-                     {isSubmitting ? 'Publishing...' : (editId ? 'Update Ad' : 'Publish Ad')}
-                  </button>
+                  
+                  <div className="flex flex-col items-end gap-2">
+                      <button 
+                        onClick={handlePublish}
+                        disabled={images.length === 0 || isSubmitting}
+                        className={`bg-brand-600 text-white px-10 py-4 rounded-xl font-bold hover:bg-brand-700 shadow-xl shadow-brand-500/30 transform hover:-translate-y-0.5 transition-all flex items-center gap-2 ${(images.length === 0 || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                         {isSubmitting ? (
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                         ) : (
+                            <Icon name="check" size={20} />
+                         )}
+                         {isSubmitting ? 'Publishing...' : (editId ? 'Update Ad' : 'Publish Ad')}
+                      </button>
+                      
+                      {uploadProgress && (
+                          <div className="w-full max-w-xs space-y-1">
+                              <div className="flex justify-between text-xs text-slate-500 font-medium">
+                                  <span>Uploading {uploadProgress.current} of {uploadProgress.total}</span>
+                                  <span>{uploadProgress.percent}%</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                      className="h-full bg-brand-500 transition-all duration-300 ease-out"
+                                      style={{ width: `${uploadProgress.percent}%` }}
+                                  />
+                              </div>
+                          </div>
+                      )}
+                  </div>
                </div>
             </div>
           )}

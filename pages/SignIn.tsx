@@ -1,11 +1,15 @@
 import React from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { loginWithEmail, signupWithEmail } from '../services/firebaseService';
+import { loginWithEmail, signupWithEmail, loginWithGoogle } from '../services/supabaseService';
 import { useAuth } from '../context/AuthContext';
 import Icon from '../components/Icon';
 import { Logo } from '../components/Logo';
 
-const SignIn: React.FC = () => {
+interface SignInProps {
+  defaultTab?: 'signin' | 'signup';
+}
+
+const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { setMockUser } = useAuth() as any;
@@ -14,17 +18,14 @@ const SignIn: React.FC = () => {
   const [message, setMessage] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isForgotPassword, setIsForgotPassword] = React.useState(false);
-  const [isSignUp, setIsSignUp] = React.useState(location.pathname === '/signup');
+  const [isSignUp, setIsSignUp] = React.useState(defaultTab === 'signup' || location.pathname === '/signup');
   
   React.useEffect(() => {
-    setIsSignUp(location.pathname === '/signup');
-  }, [location.pathname]);
+    setIsSignUp(defaultTab === 'signup' || location.pathname === '/signup');
+  }, [location.pathname, defaultTab]);
   const [authMethod, setAuthMethod] = React.useState<'email' | 'phone'>('email');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
-  const [phoneNumber, setPhoneNumber] = React.useState('');
-  const [verificationCode, setVerificationCode] = React.useState('');
-  const [confirmationResult, setConfirmationResult] = React.useState<any>(null);
   const [name, setName] = React.useState('');
   const [selectedRole, setSelectedRole] = React.useState<'Tenant' | 'Agent'>('Tenant');
 
@@ -79,61 +80,14 @@ const SignIn: React.FC = () => {
     }
   };
 
-  const handleSendPhoneCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phoneNumber) {
-      setError('Please enter your phone number.');
-      return;
-    }
-    setError(null);
-    setMessage(null);
-    setIsLoading(true);
-
+  const handleGoogleAuth = async () => {
     try {
-      const { setupRecaptcha, requestPhoneCode } = await import('../services/firebaseService');
-      const appVerifier = setupRecaptcha('recaptcha-container');
-      const result = await requestPhoneCode(phoneNumber, appVerifier);
-      setConfirmationResult(result);
-      setMessage('Verification code sent. Please check your messages.');
+      setIsLoading(true);
+      setError(null);
+      await loginWithGoogle();
     } catch (err: any) {
+      setError(err.message || 'Failed to sign in with Google.');
       console.error(err);
-      setError(err.message || 'Failed to send verification code.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyPhoneCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!verificationCode || !confirmationResult) {
-      setError('Please enter the verification code.');
-      return;
-    }
-    setError(null);
-    setMessage(null);
-    setIsLoading(true);
-
-    try {
-      const result = await confirmationResult.confirm(verificationCode);
-      const { handlePhoneUserCreation } = await import('../services/firebaseService');
-      
-      const user = await handlePhoneUserCreation(result.user, name, selectedRole);
-
-      if (user && user.uid && !user.providerData?.length) {
-        setMockUser({
-          id: user.uid,
-          name: user.displayName || name || 'Mock User',
-          avatar: user.photoURL,
-          socials: { phone: user.phoneNumber },
-          role: selectedRole,
-          verified: true
-        });
-      }
-      navigate(from, { replace: true });
-    } catch (err: any) {
-      console.error(err);
-      setError('Invalid verification code. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -148,7 +102,7 @@ const SignIn: React.FC = () => {
     setMessage(null);
     setIsLoading(true);
     try {
-      const { sendPasswordResetEmail } = await import('../services/firebaseService');
+      const { sendPasswordResetEmail } = await import('../services/supabaseService');
       await sendPasswordResetEmail(email);
       setMessage('Password reset email sent. Please check your inbox.');
       setIsForgotPassword(false);
@@ -250,141 +204,64 @@ const SignIn: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="flex justify-center gap-4 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMethod('email');
-                      setError(null);
-                      setMessage(null);
-                    }}
-                    className={`text-sm font-semibold transition-all ${
-                      authMethod === 'email' ? 'text-brand-600 border-b-2 border-brand-600 pb-1' : 'text-slate-400 hover:text-slate-600'
-                    }`}
-                  >
-                    Email address
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMethod('phone');
-                      setError(null);
-                      setMessage(null);
-                    }}
-                    className={`text-sm font-semibold transition-all ${
-                      authMethod === 'phone' ? 'text-brand-600 border-b-2 border-brand-600 pb-1' : 'text-slate-400 hover:text-slate-600'
-                    }`}
-                  >
-                    Phone number
-                  </button>
+                <button
+                  type="button"
+                  onClick={handleGoogleAuth}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold py-3.5 rounded-xl transition-all shadow-sm mb-4"
+                >
+                  <Icon name="search" size={20} />
+                  Continue with Google
+                </button>
+                
+                <div className="relative flex items-center mb-6">
+                  <div className="flex-grow border-t border-slate-200"></div>
+                  <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">or</span>
+                  <div className="flex-grow border-t border-slate-200"></div>
                 </div>
 
-                {authMethod === 'email' ? (
-                  <form onSubmit={handleEmailAuth} className="space-y-4">
-                    {isSignUp && (
-                      <div>
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          placeholder="Full Name"
-                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition-all"
-                          required={isSignUp}
-                        />
-                      </div>
-                    )}
+                <form onSubmit={handleEmailAuth} className="space-y-4">
+                  {isSignUp && (
                     <div>
                       <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Email address"
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Full Name"
                         className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition-all"
-                        required
+                        required={isSignUp}
                       />
                     </div>
-                    <div>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Password"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition-all"
-                        required
-                        minLength={6}
-                      />
-                    </div>
-                    <button 
-                      type="submit"
-                      disabled={isLoading}
-                      className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3.5 rounded-xl transition-all shadow-sm hover:shadow-md disabled:opacity-50"
-                    >
-                      {isLoading ? 'Processing...' : (isSignUp ? 'Create Account' : 'Sign In')}
-                    </button>
-                  </form>
-                ) : (
-                  <form onSubmit={confirmationResult ? handleVerifyPhoneCode : handleSendPhoneCode} className="space-y-4">
-                    {isSignUp && !confirmationResult && (
-                      <div>
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          placeholder="Full Name"
-                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition-all"
-                          required={isSignUp}
-                        />
-                      </div>
-                    )}
-                    {!confirmationResult ? (
-                      <div>
-                        <input
-                          type="tel"
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          placeholder="Phone Number (e.g. +1234567890)"
-                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition-all"
-                          required
-                        />
-                         <div id="recaptcha-container" className="mt-2 text-center flex justify-center"></div>
-                      </div>
-                    ) : (
-                      <div>
-                        <input
-                          type="text"
-                          value={verificationCode}
-                          onChange={(e) => setVerificationCode(e.target.value)}
-                          placeholder="6-digit Verification Code"
-                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition-all text-center tracking-widest text-lg font-mono"
-                          required
-                          maxLength={6}
-                        />
-                      </div>
-                    )}
-                    <button 
-                      type="submit"
-                      disabled={isLoading}
-                      className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3.5 rounded-xl transition-all shadow-sm hover:shadow-md disabled:opacity-50"
-                    >
-                      {isLoading ? 'Processing...' : (confirmationResult ? 'Verify & Sign In' : 'Send Code')}
-                    </button>
-                    {confirmationResult && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                           setConfirmationResult(null);
-                           setVerificationCode('');
-                           setMessage(null);
-                        }}
-                        className="w-full text-slate-500 hover:text-slate-800 text-sm font-medium pt-2 text-center"
-                      >
-                         Change phone number
-                      </button>
-                    )}
-                  </form>
-                )}
-
-
+                  )}
+                  <div>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Email address"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition-all"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition-all"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3.5 rounded-xl transition-all shadow-sm hover:shadow-md disabled:opacity-50"
+                  >
+                    {isLoading ? 'Processing...' : (isSignUp ? 'Create Account' : 'Sign In')}
+                  </button>
+                </form>
 
                 <div className="mt-6 text-center space-y-4">
                   <Link 

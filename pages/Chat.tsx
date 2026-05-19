@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getChats, getMessages, sendMessage, createChat, getUserProfile } from '../services/firebaseService';
+import { getChats, subscribeToMessages, sendMessage, createChat, getUserProfile } from '../services/supabaseService';
 import { Chat as ChatType, User, ChatMessage } from '../types';
 import Icon from '../components/Icon';
 import { sanitizeString } from '../services/security';
 import { useAuth } from '../context/AuthContext';
+import ErrorBanner from '../components/ErrorBanner';
 
 const Chat: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -12,6 +13,8 @@ const Chat: React.FC = () => {
   const [chats, setChats] = useState<ChatType[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<ChatType | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [messageInput, setMessageInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -65,11 +68,12 @@ const Chat: React.FC = () => {
           setActiveChatId(chatId);
         } catch (error) {
           console.error("Error creating chat:", error);
+          setError('Failed to start chat. Please try again.');
         }
       };
       startNewChat();
     }
-  }, [searchParams, currentUser]);
+  }, [searchParams, currentUser, retryKey]);
 
   useEffect(() => {
     if (!activeChatId) {
@@ -80,9 +84,11 @@ const Chat: React.FC = () => {
 
     const chat = chats.find(c => c.id === activeChatId);
     setActiveChat(chat);
+    
+    setMessages(chat?.messages || []);
 
-    const unsubscribe = getMessages(activeChatId, (updatedMessages) => {
-      setMessages(updatedMessages);
+    const unsubscribe = subscribeToMessages(activeChatId, (newMessages) => {
+      setMessages(prev => [...prev, ...newMessages]);
     });
 
     return () => unsubscribe();
@@ -108,6 +114,14 @@ const Chat: React.FC = () => {
     const otherId = chat.participants.find(p => p !== currentUser?.id);
     return otherId ? participants[otherId] : undefined;
   };
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 pt-6 pb-4 h-[calc(100vh-5rem)] flex items-center justify-center">
+        <ErrorBanner message={error} onRetry={() => setRetryKey(k => k + 1)} />
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 pt-6 pb-4 h-[calc(100vh-5rem)]"> {/* Standardized padding with gap */}

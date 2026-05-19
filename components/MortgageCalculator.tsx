@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
+import { useLocation } from '../context/LocationContext';
+import { getSymbolFromCode } from '../services/location';
 
 interface MortgageCalculatorProps {
   price: number;
@@ -11,6 +13,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({ price }) => {
   const [interestRate, setInterestRate] = useState(6.5);
   const [loanTerm, setLoanTerm] = useState(30);
   const [monthlyPayment, setMonthlyPayment] = useState(0);
+  const { userLocation } = useLocation();
 
   useEffect(() => {
     const principal = price - downPayment;
@@ -26,6 +29,8 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({ price }) => {
       setMonthlyPayment(payment);
     }
   }, [price, downPayment, interestRate, loanTerm]);
+
+  const currencySymbol = getSymbolFromCode(userLocation.countryCode === 'GH' ? 'GHS' : userLocation.countryCode === 'NG' ? 'NGN' : 'USD');
 
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
@@ -43,7 +48,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({ price }) => {
         <div>
           <div className="flex justify-between mb-1">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Down Payment</label>
-            <span className="text-xs font-bold text-slate-900">${downPayment.toLocaleString()}</span>
+            <span className="text-xs font-bold text-slate-900">{currencySymbol}{downPayment.toLocaleString()}</span>
           </div>
           <input 
             type="range" 
@@ -84,7 +89,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({ price }) => {
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-slate-600">Estimated Monthly</span>
             <div className="text-right">
-              <span className="text-2xl font-black text-brand-600">${Math.round(monthlyPayment).toLocaleString()}</span>
+              <span className="text-2xl font-black text-brand-600">{currencySymbol}{Math.round(monthlyPayment).toLocaleString()}</span>
               <span className="text-[10px] block text-slate-400">Principal & Interest</span>
             </div>
           </div>

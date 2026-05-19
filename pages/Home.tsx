@@ -1,12 +1,14 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { CATEGORIES } from '../constants';
 import ListingCard from '../components/ListingCard';
 import AdCard from '../components/AdCard';
-import { getListings } from '../services/firebaseService';
+import { getListings } from '../services/supabaseService';
 import Icon from '../components/Icon';
 import { Link } from 'react-router-dom';
 import { useLocation as useAppLocation } from '../context/LocationContext';
+import { useMixedContent } from '../hooks/useMixedContent';
+import ErrorBanner from '../components/ErrorBanner';
 
 const ITEMS_PER_PAGE = 24; // Reduced for better performance with live data
 
@@ -15,37 +17,85 @@ const Home: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [listings, setListings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isAppending, setIsAppending] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
+  const loaderRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    setCurrentPage(1); // Reset page on country change
+    setIsAppending(false);
+    setError(null);
+  }, [userLocation.countryCode]);
+
+  const fetchListings = async () => {
+    // Don't show full loading skeleton if we're just appending
+    if (!isAppending) setIsLoading(true);
+    setError(null);
+    try {
+      const { listings: fetchedListings, total } = await getListings({
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+        countryCode: userLocation.countryCode
+      });
+      
+      if (isAppending) {
+          setListings(prev => {
+              // Avoid duplicates in case of React double rendering
+              const existingIds = new Set(prev.map(l => l.id));
+              const uniqueNew = fetchedListings.filter(l => !existingIds.has(l.id));
+              return [...prev, ...uniqueNew];
+          });
+      } else {
+          setListings(fetchedListings);
+      }
+      setTotalItems(total);
+    } catch (err) {
+      console.error("Error fetching listings:", err);
+      setError('Failed to load listings. Please check your connection.');
+    } finally {
+      setIsLoading(false);
+      setIsAppending(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchListings = async () => {
-      setIsLoading(true);
-      try {
-        const { listings: fetchedListings, total } = await getListings({
-          page: currentPage,
-          limit: ITEMS_PER_PAGE,
-          countryCode: userLocation.countryCode
-        });
-        setListings(fetchedListings);
-        setTotalItems(total);
-      } catch (error) {
-        console.error("Error fetching listings:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchListings();
     
-    // Scroll to top of the trending section or page
-    const trendingSection = document.getElementById('trending-section');
-    if (trendingSection && currentPage > 1) {
-      trendingSection.scrollIntoView({ behavior: 'smooth' });
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll to top of the trending section or page if NOT appending
+    if (!isAppending) {
+        const trendingSection = document.getElementById('trending-section');
+        if (trendingSection && currentPage > 1) {
+          trendingSection.scrollIntoView({ behavior: 'smooth' });
+        } else if (currentPage === 1) {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     }
   }, [currentPage, userLocation.countryCode]);
+
+  useEffect(() => {
+      const observer = new IntersectionObserver(
+          (entries) => {
+              if (entries[0].isIntersecting && !isLoading && currentPage < totalPages) {
+                  // check if on mobile
+                  if (window.innerWidth < 768) {
+                      setIsAppending(true);
+                      setCurrentPage(prev => prev + 1);
+                  }
+              }
+          },
+          { threshold: 0.1 }
+      );
+      
+      if (loaderRef.current) {
+          observer.observe(loaderRef.current);
+      }
+      
+      return () => {
+          if (loaderRef.current) observer.unobserve(loaderRef.current);
+      };
+  }, [isLoading, currentPage, totalPages]);
 
   // Define country-specific ads
   const ads = useMemo(() => {
@@ -87,51 +137,61 @@ const Home: React.FC = () => {
   }, [userLocation]);
 
   // Mix listings and ads
-  const mixedContent = useMemo(() => {
-    const result: { type: 'listing' | 'ad', data: any }[] = [];
-    let adCount = 0;
-    
-    // Place first ad on the first row (index 0)
-    if (ads.length > 0) {
-      result.push({ type: 'ad' as const, data: ads[adCount % ads.length] });
-      adCount++;
-    }
-
-    // Interval for "after every 2 rows" (assuming ~8 columns per row, so 16 items)
-    const interval = 16;
-    
-    listings.forEach((listing, index) => {
-      result.push({ type: 'listing' as const, data: listing });
-      
-      // After every 16 listings, insert an ad
-      if ((index + 1) % interval === 0 && adCount < ads.length) {
-        result.push({ type: 'ad' as const, data: ads[adCount % ads.length] });
-        adCount++;
-      }
-    });
-    
-    return result;
-  }, [listings, ads]);
+  const mixedContent = useMixedContent(listings, ads, 16, 10, true);
 
   const renderPagination = () => {
     const pages = [];
-    for (let i = 1; i <= totalPages; i++) {
+    const windowStart = Math.max(1, currentPage - 1);
+    const windowEnd = Math.min(totalPages, currentPage + 1);
+
+    if (windowStart > 1) {
       pages.push(
         <button
-          key={i}
-          onClick={() => setCurrentPage(i)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
-            currentPage === i
-              ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30 scale-110'
-              : 'bg-white text-slate-600 hover:bg-brand-50 border border-slate-200'
-          }`}
+          key={1}
+          onClick={() => setCurrentPage(1)}
+          className="w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all bg-white text-slate-600 hover:bg-brand-50 border border-slate-200"
         >
-          {i}
+          1
+        </button>
+      );
+      if (windowStart > 2) {
+         pages.push(<span key={"dots-1"} className="px-2 text-slate-400">...</span>);
+      }
+    }
+
+    for (let i = windowStart; i <= windowEnd; i++) {
+        pages.push(
+            <button
+                key={i}
+                onClick={() => setCurrentPage(i)}
+                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
+                currentPage === i
+                    ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30 scale-110'
+                    : 'bg-white text-slate-600 hover:bg-brand-50 border border-slate-200'
+                }`}
+            >
+                {i}
+            </button>
+        );
+    }
+
+    if (windowEnd < totalPages) {
+       if (windowEnd < totalPages - 1) {
+           pages.push(<span key={"dots-2"} className="px-2 text-slate-400">...</span>);
+       }
+       pages.push(
+        <button
+          key={totalPages}
+          onClick={() => setCurrentPage(totalPages)}
+          className="w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all bg-white text-slate-600 hover:bg-brand-50 border border-slate-200"
+        >
+          {totalPages}
         </button>
       );
     }
+
     return (
-      <div className="flex items-center justify-center gap-2 mt-12">
+      <div className="hidden md:flex items-center justify-center gap-2 mt-12">
         <button
           onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
           disabled={currentPage === 1}
@@ -158,10 +218,19 @@ const Home: React.FC = () => {
           {/* Trending Listings */}
           <section id="trending-section">
             <div className="glass-card rounded-[2rem] p-6 md:p-8 shadow-sm">
-              {isLoading ? (
+              {error ? (
+                <ErrorBanner message={error} onRetry={fetchListings} />
+              ) : isLoading && !isAppending ? (
                 <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
                   {[...Array(12)].map((_, i) => (
-                    <div key={i} className="aspect-[3/4] bg-slate-100 rounded-2xl animate-pulse"></div>
+                    <div key={i} className="w-full bg-slate-100 rounded-xl aspect-[3/4] animate-pulse">
+                      <div className="w-full h-[60%] bg-slate-200 rounded-t-xl mb-2"></div>
+                      <div className="p-2 w-full h-[40%] flex flex-col gap-2">
+                         <div className="w-3/4 h-3 bg-slate-200 rounded-full"></div>
+                         <div className="w-1/2 h-3 bg-slate-200 rounded-full"></div>
+                         <div className="mt-auto w-1/3 h-4 bg-slate-200 rounded-full"></div>
+                      </div>
+                   </div>
                   ))}
                 </div>
               ) : listings.length === 0 ? (
@@ -192,6 +261,15 @@ const Home: React.FC = () => {
                       )
                     ))}
                   </div>
+
+                  {isLoading && isAppending && (
+                      <div className="mt-8 flex justify-center">
+                          <Icon name="loader" size={24} className="animate-spin text-brand-500" />
+                      </div>
+                  )}
+
+                  {/* Intersection Observer Target */}
+                  <div ref={loaderRef} className="h-4 w-full" />
 
                   {/* Pagination */}
                   {totalPages > 1 && renderPagination()}

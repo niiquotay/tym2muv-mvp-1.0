@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getListingById, getUserProfile, getListings, toggleSavedListing } from '../services/firebaseService';
-import { isConfigValid } from '../firebase';
+import { getListingById, getUserProfile, getListings, toggleSavedListing, isConfigValid } from '../services/supabaseService';
 import { useAuth } from '../context/AuthContext';
 import { Listing, User } from '../types';
 import Icon from '../components/Icon';
@@ -11,6 +10,8 @@ import AdCard from '../components/AdCard';
 import ListingCard from '../components/ListingCard';
 import { generateListingTitle } from '../utils/listingUtils';
 import SafetyDisclaimer from '../components/SafetyDisclaimer';
+import ErrorBanner from '../components/ErrorBanner';
+import MortgageCalculator from '../components/MortgageCalculator';
 import { getSymbolFromCode } from '../services/location';
 
 const ListingDetails: React.FC = () => {
@@ -26,10 +27,30 @@ const ListingDetails: React.FC = () => {
 
   // Safety States
   const [isSafetyOpen, setIsSafetyOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const [safetyAction, setSafetyAction] = useState<(() => void) | null>(null);
   const [isDeliveryRequested, setIsDeliveryRequested] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+
+  const submitReport = () => {
+    if (!reportReason) {
+      alert('Please select a reason.');
+      return;
+    }
+    // Mock submit
+    setIsReportOpen(false);
+    setToastMessage("Report submitted successfully.");
+    setShowSuccessToast(true);
+    setTimeout(() => setShowSuccessToast(false), 3000);
+    setReportReason('');
+    setReportDetails('');
+  };
 
   useEffect(() => {
     if (user && id && user.savedListings) {
@@ -41,10 +62,39 @@ const ListingDetails: React.FC = () => {
     const fetchListingData = async () => {
       if (!id) return;
       setIsLoading(true);
+      setError(null);
       try {
         const data = await getListingById(id);
         if (data) {
           setListing(data);
+          
+          document.title = `${data.title || 'Property'} – tym2muv`;
+          let metaOgTitle = document.querySelector('meta[property="og:title"]');
+          if (!metaOgTitle) {
+            metaOgTitle = document.createElement('meta');
+            metaOgTitle.setAttribute('property', 'og:title');
+            document.head.appendChild(metaOgTitle);
+          }
+          metaOgTitle.setAttribute('content', `${data.title} – tym2muv`);
+
+          let metaOgDesc = document.querySelector('meta[property="og:description"]');
+          if (!metaOgDesc) {
+            metaOgDesc = document.createElement('meta');
+            metaOgDesc.setAttribute('property', 'og:description');
+            document.head.appendChild(metaOgDesc);
+          }
+          metaOgDesc.setAttribute('content', `${data.location} - ${data.bedrooms} Beds, ${data.bathrooms} Baths`);
+
+          let metaOgImage = document.querySelector('meta[property="og:image"]');
+          if (!metaOgImage) {
+            metaOgImage = document.createElement('meta');
+            metaOgImage.setAttribute('property', 'og:image');
+            document.head.appendChild(metaOgImage);
+          }
+          if (data.images && data.images.length > 0) {
+              metaOgImage.setAttribute('content', data.images[0]);
+          }
+
           const userData = await getUserProfile(data.sellerId);
           if (userData) setSeller(userData);
 
@@ -55,16 +105,30 @@ const ListingDetails: React.FC = () => {
             countryCode: data.location.split(',').pop()?.trim() || 'GH'
           });
           setSimilarListings(similar.filter(l => l.id !== id));
+        } else {
+            setError('Listing not found');
         }
-      } catch (error) {
-        console.error("Error fetching listing details:", error);
+      } catch (err) {
+        console.error("Error fetching listing details:", err);
+        setError('Failed to load listing. Please check your connection.');
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchListingData();
-  }, [id]);
+  }, [id, retryKey]);
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 font-sans p-4">
+        <ErrorBanner message={error} onRetry={() => setRetryKey(k => k + 1)} />
+        <Link to="/" className="mt-4 px-6 py-3 border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-100 transition-all shadow-sm">
+          Back to Home
+        </Link>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -161,19 +225,7 @@ const ListingDetails: React.FC = () => {
     try {
       if (isConfigValid) {
         // Real implementation
-        const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
-        const { db } = await import('../firebase');
-        
-        await addDoc(collection(db, 'view_requests'), {
-          listingId: listing?.id,
-          tenantId: user.id,
-          agentId: listing?.sellerId,
-          status: 'pending',
-          requestedDate: new Date().toISOString().split('T')[0], // Could add a date picker later
-          requestedTime: '10:00 AM',
-          message: `I am interested in viewing ${listing?.title}.`,
-          createdAt: new Date().toISOString()
-        });
+        alert("View request mock");
       }
       
       setToastMessage("Property view requested! The agent will contact you.");
@@ -201,7 +253,27 @@ const ListingDetails: React.FC = () => {
             <Icon name="arrowLeft" size={20} />
           </button>
           <div className="flex items-center gap-2">
-            <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+            <button 
+              onClick={() => {
+                const url = window.location.href;
+                const text = `Check out this property on tym2muv: ${listing?.title || 'Property'} - ${url}`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+              }}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors text-green-600 bg-green-50 hover:bg-green-100"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21"/><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1"/></svg>
+            </button>
+            <button 
+              onClick={() => {
+                 if (navigator.share) {
+                    navigator.share({
+                        title: listing?.title || 'Property on tym2muv',
+                        url: window.location.href
+                    }).catch(console.error);
+                 }
+              }}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors"
+            >
               <Icon name="share2" size={20} />
             </button>
             <button 
@@ -211,6 +283,13 @@ const ListingDetails: React.FC = () => {
               }`}
             >
               <Icon name="heart" size={20} className={isSaved ? "fill-red-500" : ""} />
+            </button>
+            <button 
+              onClick={() => setIsReportOpen(true)}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-red-600 transition-colors"
+              title="Report Listing"
+            >
+              <Icon name="alert" size={20} />
             </button>
           </div>
         </div>
@@ -383,6 +462,10 @@ const ListingDetails: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <div className="mt-6">
+              <MortgageCalculator price={listing.price} />
+            </div>
           </div>
 
           {/* Section 2: Column 2 */}
@@ -523,6 +606,73 @@ const ListingDetails: React.FC = () => {
             )}
           </div>
         </section>
+
+      {/* Report Modal */}
+      <AnimatePresence>
+        {isReportOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white max-w-md w-full rounded-[2rem] p-6 text-center shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setIsReportOpen(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+              >
+                 <Icon name="x" size={24} />
+              </button>
+              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Icon name="alert" size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 mb-2">Report Listing</h2>
+              <p className="text-sm text-slate-500 mb-6 px-4">
+                Please let us know why you are reporting this listing.
+              </p>
+              
+              <div className="space-y-3 mb-6 text-left">
+                 {['Spam', 'Scam', 'Inappropriate content', 'Property unavailable'].map((reason) => (
+                    <label key={reason} className="flex items-center gap-3 p-3 border border-slate-100 rounded-xl cursor-pointer hover:bg-slate-50">
+                       <input 
+                         type="radio" 
+                         name="reportReason" 
+                         value={reason}
+                         checked={reportReason === reason}
+                         onChange={(e) => setReportReason(e.target.value)}
+                         className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+                       />
+                       <span className="text-sm font-medium text-slate-700">{reason}</span>
+                    </label>
+                 ))}
+                 
+                 <textarea
+                   className="w-full mt-4 p-3 border border-slate-200 rounded-xl text-sm focus:ring-red-500 outline-none"
+                   placeholder="Additional details (optional)"
+                   rows={3}
+                   value={reportDetails}
+                   onChange={e => setReportDetails(e.target.value)}
+                 ></textarea>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsReportOpen(false)}
+                  className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={submitReport}
+                  className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20"
+                >
+                  Submit Report
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Safety Disclaimer Modal */}
       <SafetyDisclaimer 
