@@ -35,38 +35,71 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { agent_id, plan, amount } = await req.json();
+    const { reference, listingId } = await req.json();
 
-    if (!agent_id || !plan) {
+    if (!reference || !listingId) {
       return new Response(
-        JSON.stringify({ error: "Missing billing parameters" }),
+        JSON.stringify({ error: "Missing payment parameters" }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Security Check: Only the authenticated user can upgrade their own agent account
-    // Or if the user is a super admin
-    if (user.id !== agent_id && user.user_metadata?.role !== 'admin') {
+    // 2. Check Idempotency
+    const { data: existingPayment } = await supabaseAdmin
+      .from('payments')
+      .select('id')
+      .eq('reference_id', reference)
+      .maybeSingle();
+
+    if (existingPayment) {
       return new Response(
-        JSON.stringify({ error: "Forbidden: Cannot alter another user's subscription" }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Payment already processed", success: false }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. Process payment via Stripe or Paystack (MOCKED)
-    console.log(`Processing payment of ${amount} for plan ${plan}`);
+    // 3. Verify Payment via Paystack
+    const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
+    if (!paystackSecretKey) {
+      throw new Error("Missing Paystack secret key");
+    }
 
-    // 3. Update agent subscription tier securely bypassing RLS (since we already authorized)
-    const expiryDate = new Date();
-    expiryDate.setMonth(expiryDate.getMonth() + 1);
+    const verifyReq = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${paystackSecretKey}`
+      }
+    });
 
+    const verifyData = await verifyReq.json();
+
+    if (!verifyData.status || verifyData.data.status !== 'success') {
+      return new Response(
+        JSON.stringify({ error: "Payment failed verification", success: false }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 4. Update the listing to isPremium = true
+    const { error: listingError } = await supabaseAdmin
+      .from('properties')
+      .update({ is_premium: true })
+      .eq('id', listingId);
+
+    if (listingError) throw listingError;
+
+    // 5. Insert payment record
     const { data, error } = await supabaseAdmin
-      .from('agents')
-      .update({
-        subscription_plan: plan,
-        subscription_expiry: expiryDate.toISOString(),
+      .from('payments')
+      .insert({
+        user_id: user.id,
+        amount: verifyData.data.amount / 100, // Paystack amount is in pesewas/kobo
+        currency: verifyData.data.currency,
+        status: 'completed',
+        purpose: 'listing_fee',
+        reference_id: reference,
+        gateway: 'Paystack'
       })
-      .eq('id', agent_id)
       .select()
       .single();
 
@@ -77,8 +110,9 @@ Deno.serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err: any) {
+    console.error(err);
     return new Response(
-      JSON.stringify({ error: "Payment processing failed", details: err.message }),
+      JSON.stringify({ error: "Payment processing failed", details: err.message, success: false }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

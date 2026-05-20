@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getListingById, getUserProfile, getListings, toggleSavedListing, isConfigValid } from '../services/supabaseService';
+import { getListingById, getUserProfile, getListings, toggleSavedListing, createViewRequest } from '../services/supabaseService';
 import { useAuth } from '../context/AuthContext';
 import { Listing, User } from '../types';
 import Icon from '../components/Icon';
@@ -13,6 +13,7 @@ import SafetyDisclaimer from '../components/SafetyDisclaimer';
 import ErrorBanner from '../components/ErrorBanner';
 import MortgageCalculator from '../components/MortgageCalculator';
 import { getSymbolFromCode } from '../services/location';
+import SkeletonCard from '../components/SkeletonCard';
 
 const ListingDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -132,10 +133,13 @@ const ListingDetails: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin mx-auto mb-4"></div>
+      <div className="min-h-screen container mx-auto px-4 py-8">
+        <div className="w-full text-center mb-8">
           <p className="text-slate-600">Loading property details...</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+           <SkeletonCard />
+           <SkeletonCard />
         </div>
       </div>
     );
@@ -223,10 +227,15 @@ const ListingDetails: React.FC = () => {
     setIsDeliveryRequested(true); // Can rename this state later, reusing for loading indicator for now
     
     try {
-      if (isConfigValid) {
-        // Real implementation
-        alert("View request mock");
-      }
+      await createViewRequest({
+        listingId: listing.id,
+        tenantId: user.id,
+        agentId: listing.sellerId,
+        status: 'pending',
+        requestedDate: new Date().toISOString(),
+        requestedTime: '10:00 AM', // Default, should be added to UI
+        message: 'I would like to view this property.'
+      });
       
       setToastMessage("Property view requested! The agent will contact you.");
       setShowSuccessToast(true);

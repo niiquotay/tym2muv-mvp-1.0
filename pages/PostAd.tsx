@@ -4,7 +4,7 @@ import Icon from '../components/Icon';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import LocationSelect from '../components/LocationSelect';
 import { generateListingTitle } from '../utils/listingUtils';
-import { sanitizeString } from '../services/security';
+import { sanitizeString, validateListingData, checkRateLimit } from '../services/security';
 import { getListingById, updateListing, createListing, uploadImage } from '../services/supabaseService';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
@@ -189,6 +189,24 @@ const PostAd: React.FC = () => {
 
   const handlePublish = async () => {
     if (!user) return;
+    
+    if (!checkRateLimit('post_listing', 5, 3600000)) {
+      alert("You have reached the limit of 5 listings per hour. Please try again later.");
+      return;
+    }
+
+    const listingDataToValidate = {
+      ...formData,
+      price: parseFloat(formData.price),
+      images: images
+    };
+
+    const validation = validateListingData(listingDataToValidate);
+    if (!validation.valid) {
+      alert("Please fix the following errors:\n" + validation.errors.join('\n'));
+      return;
+    }
+
     setIsSubmitting(true);
     setUploadProgress(null);
 

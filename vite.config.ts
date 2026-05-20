@@ -45,7 +45,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      sourcemap: true,
+      sourcemap: mode === 'development' ? true : 'hidden',
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),

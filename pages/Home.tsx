@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import { useLocation as useAppLocation } from '../context/LocationContext';
 import { useMixedContent } from '../hooks/useMixedContent';
 import ErrorBanner from '../components/ErrorBanner';
+import SkeletonCard from '../components/SkeletonCard';
 
 const ITEMS_PER_PAGE = 24; // Reduced for better performance with live data
 
@@ -223,14 +224,7 @@ const Home: React.FC = () => {
               ) : isLoading && !isAppending ? (
                 <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
                   {[...Array(12)].map((_, i) => (
-                    <div key={i} className="w-full bg-slate-100 rounded-xl aspect-[3/4] animate-pulse">
-                      <div className="w-full h-[60%] bg-slate-200 rounded-t-xl mb-2"></div>
-                      <div className="p-2 w-full h-[40%] flex flex-col gap-2">
-                         <div className="w-3/4 h-3 bg-slate-200 rounded-full"></div>
-                         <div className="w-1/2 h-3 bg-slate-200 rounded-full"></div>
-                         <div className="mt-auto w-1/3 h-4 bg-slate-200 rounded-full"></div>
-                      </div>
-                   </div>
+                    <SkeletonCard key={i} />
                   ))}
                 </div>
               ) : listings.length === 0 ? (

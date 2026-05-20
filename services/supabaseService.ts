@@ -1,25 +1,8 @@
 import { supabase } from '../supabaseClient';
 import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review, Payment, ViewRequest } from '../types';
-import { MOCK_USERS, MOCK_LISTINGS, MOCK_ADS, MOCK_CHATS } from './mockData';
-
-// Placeholder config validation
-export const isConfigValid = !!import.meta.env.VITE_SUPABASE_URL;
 
 // --- AUTH SERVICES ---
 export const loginWithEmail = async (email: string, password: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
-  if (!isConfigValid) {
-    const mockUser = MOCK_USERS[Math.floor(Math.random() * MOCK_USERS.length)];
-    return {
-      uid: mockUser.id,
-      displayName: mockUser.name,
-      photoURL: mockUser.avatar,
-      email: email,
-      providerData: [],
-      role: selectedRole,
-      isNewAccount: false
-    };
-  }
-
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   
@@ -28,18 +11,6 @@ export const loginWithEmail = async (email: string, password: string, selectedRo
 };
 
 export const signupWithEmail = async (email: string, password: string, name: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
-  if (!isConfigValid) {
-    return {
-      uid: 'user-' + Date.now(),
-      displayName: name || 'Mock User',
-      photoURL: '',
-      email: email,
-      providerData: [],
-      role: selectedRole,
-      isNewAccount: true
-    };
-  }
-
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -60,11 +31,6 @@ export const logout = () => {
 };
 
 export const subscribeToAuth = (callback: (user: any | null) => void) => {
-  if (!isConfigValid) {
-    setTimeout(() => callback(null), 0);
-    return () => {};
-  }
-  
   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
     callback(session?.user || null);
   });
@@ -111,8 +77,6 @@ const mapProfileToUser = (profileData: any): User => {
 };
 
 export const getUserProfile = async (userId: string): Promise<User | null> => {
-  if (!isConfigValid) return MOCK_USERS.find(u => u.id === userId) || MOCK_USERS[0];
-  
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
@@ -124,17 +88,12 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 };
 
 export const updateUserProfile = async (userId: string, updates: Partial<User>) => {
-  if (!isConfigValid) return;
-  
   const dbUpdates: any = {};
   if (updates.name !== undefined) dbUpdates.full_name = updates.name;
   if (updates.avatar !== undefined) dbUpdates.avatar_url = updates.avatar;
   if (updates.location !== undefined) dbUpdates.location = updates.location;
   if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
   
-  // Note: Only updating fields that match profiles table structure
-  // Handle socials and savedListings as needed if they exist in schema
-
   if (Object.keys(dbUpdates).length > 0) {
     await supabase.from('profiles').update(dbUpdates).eq('id', userId);
   }
@@ -157,7 +116,6 @@ export const toggleSavedListing = async (userId: string, listingId: string, curr
         .insert({ user_id: userId, listing_id: listingId });
     }
     
-    // Also update user profile savedListings array
     await supabase
        .from('profiles')
        .update({ savedListings: newSaved })
@@ -170,102 +128,186 @@ export const toggleSavedListing = async (userId: string, listingId: string, curr
   return newSaved;
 };
 
-export const getAllUsers = async (): Promise<User[]> => MOCK_USERS;
-export const updateUserRole = async (userId: string, role: string) => {};
+export const getAllUsers = async (): Promise<User[]> => {
+  const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapProfileToUser);
+};
+
+export const updateUserRole = async (userId: string, role: string) => {
+  await supabase.from('profiles').update({ role }).eq('id', userId);
+};
 
 // --- LISTING SERVICES ---
+const mapPropertyToListing = (p: any): Listing => ({
+  id: p.id,
+  title: p.title,
+  price: p.price,
+  currency: p.currency,
+  location: p.location,
+  country: p.country_code,
+  imageUrl: (p.images && p.images.length > 0) ? p.images[0] : (p.image_url || ''),
+  images: p.images || [],
+  videos: p.videos || [],
+  categoryId: p.category_id,
+  subcategoryId: p.subcategory_id,
+  isFeatured: p.is_featured,
+  isPremium: p.is_premium,
+  datePosted: p.created_at,
+  expiryDate: p.expiry_date,
+  sellerId: p.agent_id,
+  description: p.description,
+  status: p.status,
+  type: p.listing_type,
+  propertyType: p.property_type,
+  bedrooms: p.bedrooms,
+  bathrooms: p.bathrooms,
+  sqft: p.sqft,
+  amenities: p.amenities || [],
+  furnished: p.furnished,
+  parking: p.parking,
+  security: p.security,
+  petsAllowed: p.pets_allowed,
+  yearBuilt: p.year_built,
+  isVerified: p.is_verified,
+  virtualTourUrl: p.virtual_tour_url,
+});
+
 export const getListings = async (filters?: SearchFilters): Promise<{ listings: Listing[], total: number }> => {
-  let listings = [...MOCK_LISTINGS];
-  if (filters?.categoryId) listings = listings.filter(l => l.categoryId === filters.categoryId);
-  if (filters?.type) listings = listings.filter(l => l.type === filters.type);
-  if (filters?.propertyType) listings = listings.filter(l => l.propertyType === filters.propertyType);
-  if (filters?.bedrooms) listings = listings.filter(l => l.bedrooms && l.bedrooms >= filters.bedrooms!);
-  if (!filters?.isAdminQuery) listings = listings.filter(l => l.status === 'active' || l.status === undefined);
-  if (filters?.countryCode) {
-    const countryListings = listings.filter(l => l.country === filters.countryCode);
-    if (countryListings.length > 0) listings = countryListings;
-  }
-  if (filters?.sellerId) listings = listings.filter(l => l.sellerId === filters.sellerId);
-  if (filters?.minPrice) listings = listings.filter(l => l.price >= parseInt(filters.minPrice!));
-  if (filters?.maxPrice) listings = listings.filter(l => l.price <= parseInt(filters.maxPrice!));
-  if (filters?.location) {
-    const searchTerms = filters.location.toLowerCase().split(' ');
-    listings = listings.filter(l => searchTerms.some(term => (`${l.title} ${l.location} ${l.description}`).toLowerCase().includes(term)));
+  let query = supabase
+    .from('properties')
+    .select('*, seller:profiles!properties_agent_id_fkey(*)', { count: 'exact' });
+
+  if (!filters?.isAdminQuery) query = query.eq('status', 'active');
+  if (filters?.categoryId) query = query.eq('category_id', filters.categoryId);
+  if (filters?.type) query = query.eq('listing_type', filters.type);
+  if (filters?.propertyType) query = query.eq('property_type', filters.propertyType);
+  if (filters?.bedrooms) query = query.gte('bedrooms', filters.bedrooms);
+  if (filters?.countryCode) query = query.eq('country_code', filters.countryCode);
+  if (filters?.sellerId) query = query.eq('agent_id', filters.sellerId);
+  if (filters?.minPrice) query = query.gte('price', parseInt(filters.minPrice));
+  if (filters?.maxPrice) query = query.lte('price', parseInt(filters.maxPrice));
+  if (filters?.location) query = query.ilike('location', `%${filters.location}%`);
+  if (filters?.page && filters?.limit) {
+    const from = (filters.page - 1) * filters.limit;
+    query = query.range(from, from + filters.limit - 1);
   }
 
-  const total = listings.length;
-  if (filters?.page && filters?.limit) {
-    const start = (filters.page - 1) * filters.limit;
-    listings = listings.slice(start, start + filters.limit);
-  }
-  return { listings, total };
+  const { data, error, count } = await query.order('is_premium', { ascending: false }).order('created_at', { ascending: false });
+  if (error) throw error;
+  return { listings: (data || []).map(mapPropertyToListing), total: count || 0 };
 };
 
 export const getListingById = async (id: string): Promise<Listing | null> => {
-  return MOCK_LISTINGS.find(l => l.id === id) || null;
+  const { data, error } = await supabase.from('properties').select('*').eq('id', id).single();
+  if (error || !data) return null;
+  return mapPropertyToListing(data);
 };
 
 export const createListing = async (listing: Omit<Listing, 'id'>): Promise<string> => {
-  return `mock-listing-${Date.now()}`;
+  const { data, error } = await supabase.from('properties').insert({
+    title: listing.title,
+    price: listing.price,
+    currency: listing.currency,
+    location: listing.location,
+    country_code: listing.country,
+    images: listing.images,
+    videos: listing.videos,
+    category_id: listing.categoryId,
+    subcategory_id: listing.subcategoryId,
+    agent_id: listing.sellerId,
+    description: listing.description,
+    status: listing.status || 'pending',
+    listing_type: listing.type,
+    property_type: listing.propertyType,
+    bedrooms: listing.bedrooms,
+    bathrooms: listing.bathrooms,
+    sqft: listing.sqft,
+    amenities: listing.amenities,
+    furnished: listing.furnished,
+    parking: listing.parking,
+    security: listing.security,
+    pets_allowed: listing.petsAllowed,
+    year_built: listing.yearBuilt,
+    virtual_tour_url: listing.virtualTourUrl,
+  }).select('id').single();
+  
+  if (error) throw error;
+  return data.id;
 };
 
-export const updateListing = async (id: string, updates: Partial<Listing>) => {};
-export const deleteListing = async (id: string) => {};
+export const updateListing = async (id: string, updates: Partial<Listing>) => {
+  const dbUpdates: any = {};
+  if (updates.status) dbUpdates.status = updates.status;
+  // Map other fields as necessary if editing is fully supported
+  const { error } = await supabase.from('properties').update(dbUpdates).eq('id', id);
+  if (error) throw error;
+};
+
+export const deleteListing = async (id: string) => {
+  const { error } = await supabase.from('properties').delete().eq('id', id);
+  if (error) throw error;
+};
 
 // --- STORAGE SERVICES ---
-export const uploadImage = async (file: File, path: string, onProgress?: (progress: number) => void): Promise<string> => {
-  if (!isConfigValid) {
-    // Simulate progress for mock
-    if (onProgress) {
-        for (let i = 10; i <= 100; i += 10) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            onProgress(i);
-        }
-    }
-    return URL.createObjectURL(file);
-  }
+export const uploadImage = async (file: File, path: string, onProgress?: (n: number) => void): Promise<string> => {
+  // Validate file type and size before uploading
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) throw new Error('Only JPEG, PNG, and WebP images are allowed.');
+  if (file.size > 5 * 1024 * 1024) throw new Error('Image must be smaller than 5MB.');
 
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    
-    // Construct the endpoint URI for Supabase Storage
-    const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/listings/${path}`;
-    
-    xhr.open('POST', endpoint, true);
-    
-    // Set required headers for Supabase API Auth
-    xhr.setRequestHeader('Authorization', `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`);
-    xhr.setRequestHeader('apikey', import.meta.env.VITE_SUPABASE_ANON_KEY);
-    // You could also set Content-Type to file.type, but typically FormData works for POST, or we send file directly
-    xhr.setRequestHeader('Content-Type', file.type);
-    
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable && onProgress) {
-        const percentComplete = Math.round((event.loaded / event.total) * 100);
-        onProgress(percentComplete);
-      }
-    };
-    
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        // Return public URL
-        const publicUrl = supabase.storage.from('listings').getPublicUrl(path).data.publicUrl;
-        resolve(publicUrl);
-      } else {
-        reject(new Error(`Upload failed: ${xhr.statusText}`));
-      }
-    };
-    
-    xhr.onerror = () => reject(new Error('Network Error during upload'));
-    
-    xhr.send(file);
-  });
+  onProgress?.(10);
+  const { data, error } = await supabase.storage
+    .from('listings')
+    .upload(path, file, { upsert: false, contentType: file.type });
+
+  if (error) throw error;
+  onProgress?.(100);
+
+  const { data: { publicUrl } } = supabase.storage.from('listings').getPublicUrl(data.path);
+  return publicUrl;
 };
 
 // --- CHAT SERVICES ---
+const mapChatRow = (data: any): Chat => ({
+  id: data.id,
+  participants: data.participants,
+  listingId: data.listing_id,
+  messages: (data.messages || []).map((m: any) => ({
+    id: m.id,
+    senderId: m.sender_id,
+    text: m.content,
+    timestamp: m.created_at,
+    isRead: m.is_read || false
+  })).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
+  lastMessage: data.last_message,
+  lastMessageTime: data.last_message_time,
+  unreadCount: data.unread_count || 0,
+  lastSenderId: data.last_sender_id
+});
+
 export const getChats = (userId: string, callback: (chats: Chat[]) => void) => {
-  callback(MOCK_CHATS.filter(c => c.participants.includes(userId)));
-  return () => {};
+  let isSubscribed = true;
+  const fetchAndCallback = async () => {
+    const { data } = await supabase
+      .from('chats')
+      .select('*, messages(*, sender:profiles(id, full_name, avatar_url))')
+      .contains('participants', [userId])
+      .order('last_message_time', { ascending: false });
+    if (isSubscribed) callback((data || []).map(mapChatRow));
+  };
+  fetchAndCallback();
+
+  const channel = supabase
+    .channel(`user-chats:${userId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, fetchAndCallback)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `participants=cs.{${userId}}` }, fetchAndCallback)
+    .subscribe();
+
+  return () => {
+    isSubscribed = false;
+    supabase.removeChannel(channel);
+  };
 };
 
 const mapMessage = (data: any): ChatMessage => ({
@@ -277,46 +319,221 @@ const mapMessage = (data: any): ChatMessage => ({
 });
 
 export const subscribeToMessages = (chatId: string, callback: (messages: ChatMessage[]) => void) => {
+  // 1. Fetch existing messages first
+  supabase.from('messages')
+    .select('*')
+    .eq('chat_id', chatId)
+    .order('created_at', { ascending: true })
+    .then(({ data }) => { if (data) callback(data.map(mapMessage)); });
+
+  // 2. Then subscribe to new messages
   const channel = supabase
-    .channel(`chat:${chatId}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
-      payload => callback([mapMessage(payload.new)])
-    )
+    .channel(`chat-messages:${chatId}`)
+    .on('postgres_changes', {
+      event: 'INSERT', schema: 'public', table: 'messages',
+      filter: `chat_id=eq.${chatId}`
+    }, payload => callback([mapMessage(payload.new)]))
     .subscribe();
+
   return () => { supabase.removeChannel(channel); };
 };
 
-export const sendMessage = async (chatId: string, senderId: string, text: string) => {};
+export const sendMessage = async (chatId: string, senderId: string, text: string) => {
+  const { error } = await supabase.from('messages').insert({
+    chat_id: chatId,
+    sender_id: senderId,
+    content: text,
+    is_read: false
+  });
+  if (error) throw error;
+  await supabase.from('chats').update({ last_message: text, last_message_time: new Date().toISOString(), last_sender_id: senderId }).eq('id', chatId);
+};
+
 export const createChat = async (currentUserId: string, otherUserId: string, listingId?: string): Promise<string> => {
-  return `mock-chat-${Date.now()}`;
+  const { data: existing } = await supabase.from('chats')
+    .select('id').contains('participants', [currentUserId, otherUserId])
+    .eq('listing_id', listingId || '').maybeSingle();
+  if (existing) return existing.id;
+
+  const { data, error } = await supabase.from('chats').insert({
+    participants: [currentUserId, otherUserId],
+    listing_id: listingId,
+    last_message: '',
+    last_message_time: new Date().toISOString(),
+    unread_count: 0
+  }).select('id').single();
+  
+  if (error) throw error;
+  return data.id;
 };
 
 // --- PAYMENT SERVICES ---
-export const createPayment = async (paymentData: Omit<Payment, 'id'>): Promise<string> => `mock-payment-${Date.now()}`;
-export const getUserPayments = async (userId: string): Promise<Payment[]> => [];
+export const createPayment = async (paymentData: Omit<Payment, 'id'>): Promise<string> => {
+  const { data, error } = await supabase.from('payments').insert({
+    user_id: paymentData.userId,
+    amount: paymentData.amount,
+    currency: paymentData.currency,
+    status: paymentData.status,
+    purpose: paymentData.purpose,
+    reference_id: paymentData.referenceId,
+    gateway: paymentData.gateway
+  }).select('id').single();
+  if (error) throw error;
+  return data.id;
+};
+
+export const getUserPayments = async (userId: string): Promise<Payment[]> => {
+  const { data, error } = await supabase.from('payments').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map((p: any) => ({
+    id: p.id,
+    userId: p.user_id,
+    amount: p.amount,
+    currency: p.currency,
+    status: p.status,
+    purpose: p.purpose,
+    referenceId: p.reference_id,
+    gateway: p.gateway,
+    createdAt: p.created_at
+  }));
+};
 
 // --- ADMIN SERVICES ---
-export const getAdminStats = async () => ({
-  totalUsers: MOCK_USERS.length,
-  totalListings: MOCK_LISTINGS.length,
-  totalAds: MOCK_ADS.length,
-  userRoles: { Admin: 1, Agent: 2, Customer: MOCK_USERS.length - 3 },
-  listingTypes: { Rent: 10, Sale: 5 },
-  adPerformance: { totalClicks: 100, totalImpressions: 5000 }
-});
+export const getAdminStats = async () => {
+  const { data, error } = await supabase.rpc('get_admin_dashboard_stats');
+  if (error) {
+    console.error('Error fetching admin stats:', error);
+    // fallback if rpc fails
+    return {
+      totalUsers: 0, totalListings: 0, totalAds: 0,
+      userRoles: { Admin: 0, Agent: 0, Customer: 0 },
+      listingTypes: { Rent: 0, Sale: 0 },
+      adPerformance: { totalClicks: 0, totalImpressions: 0 }
+    };
+  }
+  return data;
+};
 
 // --- MONETIZATION SERVICES ---
-export const getMonetizationAds = async (countryCode?: string): Promise<Monetization[]> => MOCK_ADS;
-export const createMonetizationAd = async (ad: any): Promise<string> => `mock-ad-${Date.now()}`;
-export const updateMonetizationAd = async (id: string, updates: any) => {};
-export const deleteMonetizationAd = async (id: string) => {};
-export const trackAdClick = async (id: string) => {};
-export const trackAdImpression = async (id: string) => {};
+export const getMonetizationAds = async (countryCode?: string): Promise<Monetization[]> => {
+  let query = supabase.from('monetization_ads').select('*').order('priority', { ascending: false });
+  if (countryCode) query = query.eq('country_code', countryCode);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map((ad: any) => ({
+    id: ad.id,
+    type: ad.type,
+    title: ad.title,
+    description: ad.description,
+    cta: ad.cta,
+    image: ad.image_url,
+    link: ad.link,
+    color: ad.color,
+    active: ad.active,
+    countryCode: ad.country_code,
+    priority: ad.priority,
+    clicks: ad.clicks,
+    impressions: ad.impressions,
+    createdAt: ad.created_at
+  }));
+};
+
+export const createMonetizationAd = async (ad: any): Promise<string> => {
+  const { data, error } = await supabase.from('monetization_ads').insert({
+    type: ad.type,
+    title: ad.title,
+    description: ad.description,
+    cta: ad.cta,
+    image_url: ad.image,
+    link: ad.link,
+    color: ad.color,
+    active: ad.active,
+    country_code: ad.countryCode,
+    priority: ad.priority
+  }).select('id').single();
+  if (error) throw error;
+  return data.id;
+};
+
+export const updateMonetizationAd = async (id: string, updates: any) => {
+  const dbUpdates: any = {};
+  if (updates.active !== undefined) dbUpdates.active = updates.active;
+  if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
+  if (updates.countryCode !== undefined) dbUpdates.country_code = updates.countryCode;
+  const { error } = await supabase.from('monetization_ads').update(dbUpdates).eq('id', id);
+  if (error) throw error;
+};
+
+export const deleteMonetizationAd = async (id: string) => {
+  const { error } = await supabase.from('monetization_ads').delete().eq('id', id);
+  if (error) throw error;
+};
+
+export const trackAdClick = async (id: string) => {
+  await supabase.rpc('increment_ad_stat', { ad_id: id, field: 'clicks' });
+};
+
+export const trackAdImpression = async (id: string) => {
+  await supabase.rpc('increment_ad_stat', { ad_id: id, field: 'impressions' });
+};
 
 // --- VIEW REQUEST SERVICES ---
-export const getViewRequestsForAgent = async (agentId: string): Promise<ViewRequest[]> => [];
-export const updateViewRequestStatus = async (id: string, status: any) => {};
+export const getViewRequestsForAgent = async (agentId: string): Promise<ViewRequest[]> => {
+  const { data, error } = await supabase.from('view_requests').select('*').eq('agent_id', agentId).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    listingId: r.listing_id,
+    tenantId: r.tenant_id,
+    agentId: r.agent_id,
+    status: r.status,
+    requestedDate: r.requested_date,
+    requestedTime: r.requested_time,
+    message: r.message,
+    createdAt: r.created_at
+  }));
+};
+export const updateViewRequestStatus = async (id: string, status: any) => {
+  const { error } = await supabase.from('view_requests').update({ status }).eq('id', id);
+  if (error) throw error;
+};
+
+export const createViewRequest = async (request: Omit<ViewRequest, 'id' | 'createdAt'>): Promise<string> => {
+  const { data, error } = await supabase.from('view_requests').insert({
+    listing_id: request.listingId,
+    tenant_id: request.tenantId,
+    agent_id: request.agentId,
+    status: request.status,
+    requested_date: request.requestedDate,
+    requested_time: request.requestedTime,
+    message: request.message
+  }).select('id').single();
+  if (error) throw error;
+  return data.id;
+};
 
 // --- REVIEW SERVICES ---
-export const getReviewsForVendor = async (vendorId: string): Promise<Review[]> => [];
-export const createReview = async (review: any): Promise<string> => `mock-review-${Date.now()}`;
+export const getReviewsForVendor = async (vendorId: string): Promise<Review[]> => {
+  const { data, error } = await supabase.from('reviews').select('*').eq('vendor_id', vendorId).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    vendorId: r.vendor_id,
+    customerId: r.customer_id,
+    rating: r.rating,
+    comment: r.comment,
+    createdAt: r.created_at
+  }));
+};
+
+export const createReview = async (review: any): Promise<string> => {
+  const { data, error } = await supabase.from('reviews').insert({
+    vendor_id: review.vendorId,
+    customer_id: review.customerId,
+    rating: review.rating,
+    comment: review.comment
+  }).select('id').single();
+  if (error) throw error;
+  return data.id;
+};
+

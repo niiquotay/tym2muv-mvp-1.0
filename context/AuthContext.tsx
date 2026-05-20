@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '../types';
-import { subscribeToAuth, getUserProfile, logout as backendLogout, isConfigValid } from '../services/supabaseService';
+import { subscribeToAuth, getUserProfile, logout as backendLogout } from '../services/supabaseService';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -33,35 +33,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    if (!isConfigValid) {
-      setMockUser(null);
-      return;
-    }
     await backendLogout();
   };
 
   useEffect(() => {
     const unsubscribe = subscribeToAuth(async (sUser) => {
-      if (!isConfigValid) {
-        // In mock mode, check localStorage for persisted mock user
-        const storedMockUser = localStorage.getItem('mockUser');
-        if (storedMockUser) {
-          try {
-            const parsedUser = JSON.parse(storedMockUser);
-            setUser(parsedUser);
-            setSupabaseUser({ id: parsedUser.id, email: parsedUser.socials.email } as any);
-          } catch (e) {
-            setUser(null);
-            setSupabaseUser(null);
-          }
-        } else {
-          setUser(null);
-          setSupabaseUser(null);
-        }
-        setLoading(false);
-        setIsAuthReady(true);
-        return;
-      }
 
       setSupabaseUser(sUser);
       if (sUser) {

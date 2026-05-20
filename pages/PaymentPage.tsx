@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getListingById, createPayment } from '../services/supabaseService';
+import { getListingById } from '../services/supabaseService';
+import { supabase } from '../supabaseClient';
 import { Listing } from '../types';
 import Icon from '../components/Icon';
 import { getSymbolFromCode } from '../services/location';
-import PaystackPop from '@paystack/inline-js';
 
 const PaymentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +15,13 @@ const PaymentPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [showBankDetails, setShowBankDetails] = useState(false);
+
+  const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+  if (!PAYSTACK_KEY) throw new Error('Paystack public key not configured.');
+  
+  if (import.meta.env.PROD && !PAYSTACK_KEY.startsWith('pk_live_')) {
+    console.error('WARNING: Using Paystack test key in production!');
+  }
 
   useEffect(() => {
     if (!user) {
@@ -30,32 +37,51 @@ const PaymentPage: React.FC = () => {
     fetchListing();
   }, [id, user, navigate]);
 
-  const handlePaystackPayment = () => {
-    if (!listing || !user) return;
+    const loadPaystackScript = () => {
+      return new Promise((resolve) => {
+        if ((window as any).PaystackPop) {
+          resolve(true);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://js.paystack.co/v1/inline.js';
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+      });
+    };
     
-    const handler = (PaystackPop as any).setup({
-      key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_xxxxxx',
-      email: user.email || 'customer@example.com',
-      amount: listing.price * 100, // Amount in kobo/pesewas
-      currency: listing.currency || 'GHS',
-      ref: `TYM_${Math.floor(Math.random() * 1000000000 + 1)}`,
-      callback: async (response: any) => {
-        setIsProcessing(true);
+    // Trigger script load early
+    useEffect(() => {
+      loadPaystackScript();
+    }, []);
+
+    const handlePaystackPayment = async () => {
+      if (!listing || !user) return;
+      
+      const loaded = await loadPaystackScript();
+      if (!loaded || !(window as any).PaystackPop) {
+         alert("Could not load Paystack. Please check your connection.");
+         return;
+      }
+      
+      const handler = (window as any).PaystackPop.setup({
+        key: PAYSTACK_KEY,
+        email: user.email || 'customer@example.com',
+        amount: listing.price * 100, // Amount in kobo/pesewas
+        currency: listing.currency || 'GHS',
+        ref: `TYM_${Math.floor(Math.random() * 1000000000 + 1)}`,
+        callback: async (response: any) => {
+          setIsProcessing(true);
         try {
-          await createPayment({
-            userId: user.id,
-            amount: listing.price,
-            currency: listing.currency || 'USD',
-            status: 'completed',
-            createdAt: new Date().toISOString(),
-            purpose: 'listing_fee',
-            referenceId: listing.id,
-            gateway: 'Paystack'
+          const { data, error } = await supabase.functions.invoke('process-payment', {
+            body: { reference: response.reference, listingId: listing.id }
           });
+          if (error || !data?.success) throw new Error('Payment verification failed');
           setIsSuccess(true);
-        } catch (error) {
-          console.error("Payment failed", error);
-          alert("Payment was successful but recording failed. Please contact support.");
+        } catch (err) {
+          console.error("Payment failed", err);
+          alert('Payment could not be verified. Please contact support with reference: ' + response.reference);
         } finally {
           setIsProcessing(false);
         }

@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { loginWithEmail, signupWithEmail, loginWithGoogle } from '../services/supabaseService';
 import { useAuth } from '../context/AuthContext';
+import { checkRateLimit } from '../services/security';
 import Icon from '../components/Icon';
 import { Logo } from '../components/Logo';
 
@@ -36,6 +37,12 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!checkRateLimit('login_attempt', 5, 300000)) {
+      setError('Too many login attempts. Please try again in 5 minutes.');
+      return;
+    }
+
     if (!email || !password) {
       setError('Please fill in all required fields.');
       return;

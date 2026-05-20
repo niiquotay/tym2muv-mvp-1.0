@@ -92,9 +92,15 @@ export const validate = {
   }
 };
 
-/**
- * Simple client-side rate limiter for sensitive actions.
- */
+export function validateListingData(data: any): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (!data.title || data.title.trim().length < 5) errors.push('Title must be at least 5 characters.');
+  if (data.price === undefined || data.price === null || isNaN(data.price) || data.price <= 0) errors.push('Price must be a positive number.');
+  if (!data.location || data.location.trim().length < 3) errors.push('Location is required.');
+  if (!data.categoryId) errors.push('Category is required.');
+  if (!data.images || data.images.length === 0) errors.push('At least one image is required.');
+  return { valid: errors.length === 0, errors };
+}
 const rateLimits = new Map<string, number[]>();
 
 export function checkRateLimit(action: string, limit: number = 5, windowMs: number = 60000): boolean {

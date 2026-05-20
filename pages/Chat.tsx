@@ -6,11 +6,13 @@ import Icon from '../components/Icon';
 import { sanitizeString } from '../services/security';
 import { useAuth } from '../context/AuthContext';
 import ErrorBanner from '../components/ErrorBanner';
+import SkeletonCard from '../components/SkeletonCard';
 
 const Chat: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user: currentUser } = useAuth();
   const [chats, setChats] = useState<ChatType[]>([]);
+  const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<ChatType | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,7 @@ const Chat: React.FC = () => {
     // Initialize Chats with real-time listener
     const unsubscribe = getChats(currentUser.id, (updatedChats) => {
       setChats(updatedChats);
+      setIsLoadingChats(false);
       
       // Resolve Users for new participants
       const userIds = new Set<string>();
@@ -133,7 +136,12 @@ const Chat: React.FC = () => {
                 <h2 className="text-xl font-bold text-slate-800">Messages</h2>
              </div>
              <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    {chats.length === 0 ? (
+                    {isLoadingChats ? (
+                        <div className="p-4 space-y-4">
+                            <SkeletonCard />
+                            <SkeletonCard />
+                        </div>
+                    ) : chats.length === 0 ? (
                         <div className="p-8 text-center text-slate-500">
                             <Icon name="messageCircle" size={32} className="mx-auto mb-2 text-slate-300" />
                             <p>No messages yet.</p>

@@ -8,6 +8,8 @@ import Icon from '../components/Icon';
 import { useLocation as useAppLocation } from '../context/LocationContext';
 import { useMixedContent } from '../hooks/useMixedContent';
 import ErrorBanner from '../components/ErrorBanner';
+import SkeletonCard from '../components/SkeletonCard';
+import EmptyState from '../components/EmptyState';
 
 const ITEMS_PER_BATCH = 24; 
 
@@ -253,23 +255,24 @@ const SearchPage: React.FC = () => {
            <p className="text-slate-500 font-medium text-sm">Showing {displayListings.length} results</p>
         </div>
            
-        {error ? (
+         {error ? (
            <ErrorBanner message={error} onRetry={() => setRetryKey(k => k + 1)} />
+        ) : isLoading && page === 1 ? (
+          <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
+             {Array.from({ length: 12 }).map((_, idx) => (
+                <SkeletonCard key={`skeleton-${idx}`} />
+             ))}
+          </div>
+        ) : displayListings.length === 0 ? (
+          <EmptyState 
+            title="No properties found" 
+            message="We couldn't find any properties matching your search criteria. Try adjusting your filters or search terms."
+            actionLabel="Clear Filters"
+            onAction={() => navigate('/search')}
+          />
         ) : (
           <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
-             {isLoading && page === 1 ? (
-             Array.from({ length: 12 }).map((_, idx) => (
-               <div key={`skeleton-${idx}`} className="w-full bg-slate-100 rounded-xl aspect-[3/4] animate-pulse">
-                  <div className="w-full h-[60%] bg-slate-200 rounded-t-xl mb-2"></div>
-                  <div className="p-2 w-full h-[40%] flex flex-col gap-2">
-                     <div className="w-3/4 h-3 bg-slate-200 rounded-full"></div>
-                     <div className="w-1/2 h-3 bg-slate-200 rounded-full"></div>
-                     <div className="mt-auto w-1/3 h-4 bg-slate-200 rounded-full"></div>
-                  </div>
-               </div>
-             ))
-           ) : (
-             mixedContent.map((item, idx) => (
+             {mixedContent.map((item, idx) => (
                 item.type === 'listing' ? (
                   <ListingCard key={item.data.id} listing={item.data} />
                 ) : (
@@ -283,8 +286,7 @@ const SearchPage: React.FC = () => {
                     color={item.data.color}
                   />
                 )
-             ))
-           )}
+             ))}
           </div>
         )}
            

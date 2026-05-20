@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../supabaseClient';
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -11,19 +12,30 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (authLoading) return;
+    const checkAdminStatus = async () => {
+      if (authLoading) return;
 
-    if (!isAuthenticated || !user) {
-      setIsAdmin(false);
-      return;
-    }
+      if (!isAuthenticated || !user) {
+        setIsAdmin(false);
+        return;
+      }
 
-    // Check if user is the hardcoded admin email or has Admin role
-    if (user.socials?.email === 'info@caliberdesk.com' || user.role === 'Admin') {
-      setIsAdmin(true);
-    } else {
-      setIsAdmin(false);
-    }
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const role = session?.user?.app_metadata?.role || session?.user?.user_metadata?.role || user.role;
+        
+        if (role === 'Admin') {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (err) {
+        console.error('Error checking admin session', err);
+        setIsAdmin(false);
+      }
+    };
+    
+    checkAdminStatus();
   }, [user, isAuthenticated, authLoading]);
 
   if (authLoading || isAdmin === null) {
