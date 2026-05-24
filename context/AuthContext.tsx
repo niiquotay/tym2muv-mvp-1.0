@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '../types';
 import { subscribeToAuth, getUserProfile, logout as backendLogout } from '../services/supabaseService';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { supabase } from '../supabaseClient';
 
 interface AuthContextType {
   user: User | null;
@@ -9,7 +10,6 @@ interface AuthContextType {
   loading: boolean;
   isAuthReady: boolean;
   isAuthenticated: boolean;
-  setMockUser: (user: User | null) => void;
   logout: () => Promise<void>;
 }
 
@@ -21,28 +21,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // Expose a way to manually set user for mock mode
-  const setMockUser = (mockUser: User | null) => {
-    setUser(mockUser);
-    setSupabaseUser(mockUser ? { id: mockUser.id, email: mockUser.socials.email } as any : null);
-    if (mockUser) {
-      localStorage.setItem('mockUser', JSON.stringify(mockUser));
-    } else {
-      localStorage.removeItem('mockUser');
-    }
-  };
-
   const logout = async () => {
     await backendLogout();
   };
 
   useEffect(() => {
-    const unsubscribe = subscribeToAuth(async (sUser) => {
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setSupabaseUser(session.user);
+        const profile = await getUserProfile(session.user.id);
+        setUser({ ...profile, email: session.user.email } as any); // Include email
+      } else {
+        setSupabaseUser(null);
+        setUser(null);
+      }
+      setLoading(false);
+      setIsAuthReady(true);
+    };
 
+    initAuth();
+
+    const unsubscribe = subscribeToAuth(async (sUser) => {
       setSupabaseUser(sUser);
       if (sUser) {
         const profile = await getUserProfile(sUser.id);
-        setUser(profile);
+        setUser({ ...profile, email: sUser.email } as any); // Include email
       } else {
         setUser(null);
       }
@@ -56,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, supabaseUser, loading, isAuthReady, isAuthenticated, setMockUser, logout }}>
+    <AuthContext.Provider value={{ user, supabaseUser, loading, isAuthReady, isAuthenticated, logout }}>
       {children}
     </AuthContext.Provider>
   );

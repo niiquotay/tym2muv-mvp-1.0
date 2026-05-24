@@ -10,6 +10,7 @@ import { useMixedContent } from '../hooks/useMixedContent';
 import ErrorBanner from '../components/ErrorBanner';
 import SkeletonCard from '../components/SkeletonCard';
 import EmptyState from '../components/EmptyState';
+import useDebounce from '../hooks/useDebounce';
 
 const ITEMS_PER_BATCH = 24; 
 
@@ -26,38 +27,82 @@ const SearchPage: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const [page, setPage] = useState(1);
 
-  const handleFilterChange = (field: string, value: string) => {
+  const [localFilters, setLocalFilters] = useState({
+    priceRange: searchParams.get('minPrice') ? (searchParams.get('maxPrice') ? `$${searchParams.get('minPrice')} - $${searchParams.get('maxPrice')}` : '$10,000+') : 'Price Range',
+    bedrooms: searchParams.get('bedrooms') ? `${searchParams.get('bedrooms')}+ Beds` : 'Beds',
+    bathrooms: searchParams.get('bathrooms') ? `${searchParams.get('bathrooms')}+ Baths` : 'Baths',
+    propertyType: searchParams.get('propertyType') || 'Property Type'
+  });
+
+  const debouncedFilters = useDebounce(localFilters, 500);
+
+  useEffect(() => {
+    // Sync debounced filters to URL
     const params = new URLSearchParams(location.search);
+    let changed = false;
     
-    if (field === 'priceRange') {
-        if (!value || value === 'Price Range') {
-            params.delete('minPrice');
-            params.delete('maxPrice');
-        } else if (value === '$10,000+') {
-            params.set('minPrice', '10000');
-            params.delete('maxPrice');
-        } else {
-            const parts = value.replace(/\$/g, '').replace(/,/g, '').split(' - ');
-            if (parts.length === 2) {
-                params.set('minPrice', parts[0]);
-                params.set('maxPrice', parts[1]);
-            }
-        }
-    } else {
-        if (value && value !== 'Beds' && value !== 'Baths' && value !== 'Property Type') {
-            // Remove + from strings like "1+ Beds" to just store "1", wait, "1+ Beds" is what value is, wait no, let's just use exact match or remove ' Beds' ' Baths'
-            let paramValue = value.replace('+', '').replace(' Beds', '').replace(' Baths', '');
-            params.set(field, paramValue);
-        } else {
-            params.delete(field);
-        }
+    // Bedrooms
+    if (debouncedFilters.bedrooms && debouncedFilters.bedrooms !== 'Beds') {
+      const val = debouncedFilters.bedrooms.replace('+', '').replace(' Beds', '');
+      if (params.get('bedrooms') !== val) { params.set('bedrooms', val); changed = true; }
+    } else if (params.has('bedrooms')) {
+      params.delete('bedrooms'); changed = true;
     }
     
+    // Bathrooms
+    if (debouncedFilters.bathrooms && debouncedFilters.bathrooms !== 'Baths') {
+      const val = debouncedFilters.bathrooms.replace('+', '').replace(' Baths', '');
+      if (params.get('bathrooms') !== val) { params.set('bathrooms', val); changed = true; }
+    } else if (params.has('bathrooms')) {
+      params.delete('bathrooms'); changed = true;
+    }
+
+    // Property Type
+    if (debouncedFilters.propertyType && debouncedFilters.propertyType !== 'Property Type') {
+      if (params.get('propertyType') !== debouncedFilters.propertyType) { 
+        params.set('propertyType', debouncedFilters.propertyType); 
+        changed = true; 
+      }
+    } else if (params.has('propertyType')) {
+      params.delete('propertyType'); changed = true;
+    }
+
+    // Price Range
+    if (debouncedFilters.priceRange && debouncedFilters.priceRange !== 'Price Range') {
+      if (debouncedFilters.priceRange === '$10,000+') {
+         if (params.get('minPrice') !== '10000' || params.has('maxPrice')) {
+           params.set('minPrice', '10000');
+           params.delete('maxPrice');
+           changed = true;
+         }
+      } else {
+         const parts = debouncedFilters.priceRange.replace(/\$/g, '').replace(/,/g, '').split(' - ');
+         if (parts.length === 2 && (params.get('minPrice') !== parts[0] || params.get('maxPrice') !== parts[1])) {
+            params.set('minPrice', parts[0]);
+            params.set('maxPrice', parts[1]);
+            changed = true;
+         }
+      }
+    } else if (params.has('minPrice') || params.has('maxPrice')) {
+      params.delete('minPrice');
+      params.delete('maxPrice');
+      changed = true;
+    }
+
     if (query && !params.has('location') && !['real-estate', 'jobs', 'vehicles', 'services'].includes(query.toLowerCase())) {
-        params.set('location', query);
+        if (params.get('location') !== query) {
+            params.set('location', query);
+            changed = true;
+        }
     }
-    
-    navigate(`/search?${params.toString()}`, { replace: true });
+
+    if (changed) {
+      navigate(`/search?${params.toString()}`, { replace: true });
+    }
+  }, [debouncedFilters]);
+
+  const handleFilterChange = (field: keyof typeof localFilters, value: string) => {
+    setLocalFilters(prev => ({ ...prev, [field]: value }));
   };
 
   // Define country-specific ads
@@ -190,7 +235,7 @@ const SearchPage: React.FC = () => {
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="bed" size={16} className="text-slate-400" />
             <select 
-               value={searchParams.get('bedrooms') ? `${searchParams.get('bedrooms')}+ Beds` : 'Beds'} 
+               value={localFilters.bedrooms} 
                onChange={e => handleFilterChange('bedrooms', e.target.value)}
                className="bg-transparent text-sm font-medium text-slate-700 outline-none"
             >
@@ -204,7 +249,7 @@ const SearchPage: React.FC = () => {
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="bath" size={16} className="text-slate-400" />
             <select 
-              value={searchParams.get('bathrooms') ? `${searchParams.get('bathrooms')}+ Baths` : 'Baths'}
+              value={localFilters.bathrooms}
               onChange={e => handleFilterChange('bathrooms', e.target.value)}
               className="bg-transparent text-sm font-medium text-slate-700 outline-none"
             >
@@ -217,7 +262,7 @@ const SearchPage: React.FC = () => {
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="home" size={16} className="text-slate-400" />
             <select 
-               value={searchParams.get('propertyType') || 'Property Type'}
+               value={localFilters.propertyType}
                onChange={e => handleFilterChange('propertyType', e.target.value)}
                className="bg-transparent text-sm font-medium text-slate-700 outline-none"
             >
@@ -231,13 +276,7 @@ const SearchPage: React.FC = () => {
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
             <Icon name="dollarSign" size={16} className="text-slate-400" />
             <select 
-               value={
-                 searchParams.get('minPrice') 
-                   ? searchParams.get('maxPrice') 
-                     ? `$${searchParams.get('minPrice')} - $${searchParams.get('maxPrice')}`
-                     : '$10,000+'
-                   : 'Price Range'
-               }
+               value={localFilters.priceRange}
                onChange={e => handleFilterChange('priceRange', e.target.value)}
                className="bg-transparent text-sm font-medium text-slate-700 outline-none"
             >

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getChats, subscribeToMessages, sendMessage, createChat, getUserProfile } from '../services/supabaseService';
+import { getChats, fetchMessages, sendMessage, createChat, getUserProfile, mapMessage } from '../services/supabaseService';
 import { Chat as ChatType, User, ChatMessage } from '../types';
 import Icon from '../components/Icon';
 import { sanitizeString } from '../services/security';
 import { useAuth } from '../context/AuthContext';
 import ErrorBanner from '../components/ErrorBanner';
 import SkeletonCard from '../components/SkeletonCard';
+import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 
 const Chat: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -88,14 +89,25 @@ const Chat: React.FC = () => {
     const chat = chats.find(c => c.id === activeChatId);
     setActiveChat(chat);
     
-    setMessages(chat?.messages || []);
-
-    const unsubscribe = subscribeToMessages(activeChatId, (newMessages) => {
-      setMessages(prev => [...prev, ...newMessages]);
-    });
-
-    return () => unsubscribe();
+    const loadMessages = async () => {
+      const msgs = await fetchMessages(activeChatId);
+      setMessages(msgs);
+    };
+    loadMessages();
   }, [activeChatId, chats]);
+
+  // Handle new incoming messages via realtime subscription
+  useRealtimeSubscription(
+    {
+      table: 'messages',
+      event: 'INSERT',
+      filter: `chat_id=eq.${activeChatId}`,
+    },
+    (payload) => {
+      setMessages(prev => [...prev, mapMessage(payload.new)]);
+    },
+    !!activeChatId // Only enabled when an active chat is selected
+  );
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();

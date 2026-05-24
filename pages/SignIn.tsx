@@ -13,7 +13,6 @@ interface SignInProps {
 const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setMockUser } = useAuth() as any;
 
   const [error, setError] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
@@ -59,24 +58,13 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
         user = await loginWithEmail(email, password, selectedRole);
       }
       
-      if (user && user.uid && !user.providerData?.length) {
-        // Mock user fallback
-        setMockUser({
-          id: user.uid,
-          name: user.displayName || name || 'Mock User',
-          avatar: user.photoURL,
-          socials: { email: user.email },
-          role: selectedRole,
-          verified: true
-        });
-      }
       navigate(from, { replace: true });
     } catch (err: any) {
-      if (err?.code === 'auth/email-already-in-use') {
+      if (err?.message === 'User already registered') {
         setError('This email is already in use. Please sign in instead.');
-      } else if (err?.code === 'auth/wrong-password' || err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-credential') {
+      } else if (err?.message === 'Invalid login credentials') {
         setError('Invalid email or password.');
-      } else if (err?.code === 'auth/weak-password') {
+      } else if (err?.message?.includes('Password should be')) {
         setError('Password should be at least 6 characters.');
       } else {
         setError(err.message || 'An unexpected error occurred. Please try again.');

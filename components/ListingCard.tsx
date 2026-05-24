@@ -8,6 +8,8 @@ import Icon from './Icon';
 import { generateListingTitle } from '../utils/listingUtils';
 import { useAuth } from '../context/AuthContext';
 import { getSymbolFromCode } from '../services/location';
+import { getOptimizedImageUrl } from '../utils/imageOptimization';
+import ResponsiveImage from './ResponsiveImage';
 
 interface ListingCardProps {
   listing?: Listing;
@@ -124,16 +126,13 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, seller, isLoading })
 
       {/* Image Section */}
       <div className="relative aspect-[3/2] overflow-hidden bg-slate-100 rounded-t-xl group/image z-10">
-        <img 
+        <ResponsiveImage 
           src={images[imageIndex]} 
+          sizes="(max-width: 600px) 100vw, (max-width: 1024px) 50vw, 33vw"
           alt={`${listing.title}`}
           referrerPolicy="no-referrer"
           className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-110"
-          loading="lazy"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.src = FALLBACK_IMAGE;
-          }}
+          fallbackSrc={FALLBACK_IMAGE}
         />
         
         {/* Floating Badges */}
@@ -234,15 +233,13 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, seller, isLoading })
                  <div className="flex items-center gap-2">
                      <div className="relative group/avatar cursor-pointer z-30">
                        <div className="w-6 h-6 rounded-full border border-white shadow-sm overflow-hidden bg-slate-100">
-                          <img 
-                            src={seller?.avatar} 
+                          <ResponsiveImage 
+                            src={seller?.avatar || ''}
+                            generateSrcSet={false}
                             alt="Seller" 
                             referrerPolicy="no-referrer" 
                             className="w-full h-full object-cover" 
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(seller?.name || 'User')}&background=random`;
-                            }}
+                            fallbackSrc={`https://ui-avatars.com/api/?name=${encodeURIComponent(seller?.name || 'User')}&background=random`}
                           />
                        </div>
                        <div className="absolute right-full top-1/2 -translate-y-1/2 mr-2 hidden group-hover/avatar:flex items-center gap-1 bg-white p-1 rounded-lg shadow-lg border border-slate-100 z-50">

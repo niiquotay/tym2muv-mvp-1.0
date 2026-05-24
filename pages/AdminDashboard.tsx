@@ -62,33 +62,63 @@ const AdminDashboard: React.FC = () => {
   const [listings, setListings] = useState<Listing[]>([]);
   const [ads, setAds] = useState<Monetization[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Filtering & Pagination State
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [activePage, setActivePage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
+  const [listingTab, setListingTab] = useState<'all' | 'pending' | 'rejected'>('all');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+
   const [showAdModal, setShowAdModal] = useState(false);
   const [editingAd, setEditingAd] = useState<Monetization | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [listingTab, setListingTab] = useState<'all' | 'pending'>('all');
 
-  const pendingCount = listings.filter(l => l.status === 'pending').length;
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setActivePage(1); // Reset page on filter changes
+  }, [debouncedSearch, listingTab, dateRange, activeTab]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [activeTab, activePage, debouncedSearch, listingTab, dateRange]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [statsData, usersData, listingsData, adsData] = await Promise.all([
-        getAdminStats(),
-        getAllUsers(),
-        getListings({ limit: 1000, isAdminQuery: true }),
-        getMonetizationAds()
-      ]);
-      setStats(statsData);
-      setUsers(usersData);
-      setListings(listingsData.listings);
-      setAds(adsData);
+      if (activeTab === 'analytics') {
+        const statsData = await getAdminStats();
+        setStats(statsData);
+      } else if (activeTab === 'listings') {
+        const filters: any = {
+           page: activePage,
+           pageSize,
+           isAdminQuery: true,
+           query: debouncedSearch
+        };
+        if (listingTab !== 'all') filters.status = listingTab;
+        if (dateRange.start) filters.startDate = dateRange.start;
+        if (dateRange.end) filters.endDate = dateRange.end;
+        
+        const listingsData = await getListings(filters);
+        setListings(listingsData.listings);
+        setTotalCount(listingsData.total);
+      } else if (activeTab === 'users') {
+        const usersData = await getAllUsers();
+        // Since getAllUsers doesn't have pagination yet in this codebase, we'll just filter client side for now or implement totalCount
+        setUsers(usersData);
+      } else if (activeTab === 'monetization') {
+        const adsData = await getMonetizationAds();
+        setAds(adsData);
+      }
     } catch (error) {
-      console.error('Error fetching admin data:', error);
+      console.error(`Error fetching admin data for ${activeTab}:`, error);
     } finally {
       setLoading(false);
     }
@@ -174,15 +204,13 @@ const AdminDashboard: React.FC = () => {
   };
 
   const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    u.socials?.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    u.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || 
+    u.socials?.email?.toLowerCase().includes(debouncedSearch.toLowerCase())
   );
 
-  const filteredListings = listings.filter(l => 
-    (l.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    l.location.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (listingTab === 'all' || l.status === 'pending')
-  );
+  const filteredListings = listings; // Search is now done server-side
+
+  const pendingCount = stats?.pendingApprovals || 0;
 
   if (loading && !stats) {
     return (
@@ -477,24 +505,37 @@ const AdminDashboard: React.FC = () => {
               animate={{ opacity: 1 }}
               className="space-y-6"
             >
-              <div className="flex gap-4 border-b border-gray-200 pb-2">
-                <button 
-                  onClick={() => setListingTab('all')}
-                  className={`pb-2 border-b-2 font-medium text-sm transition-colors ${listingTab === 'all' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-                >
-                  All Listings
-                </button>
-                <button 
-                  onClick={() => setListingTab('pending')}
-                  className={`pb-2 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${listingTab === 'pending' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-                >
-                  Pending Approvals
-                  {pendingCount > 0 && (
-                    <span className="bg-orange-100 text-orange-600 text-xs px-2 py-0.5 rounded-full font-bold">
-                      {pendingCount}
-                    </span>
-                  )}
-                </button>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-200 pb-2">
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setListingTab('all')}
+                    className={`pb-2 border-b-2 font-medium text-sm transition-colors ${listingTab === 'all' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  >
+                    All Listings
+                  </button>
+                  <button 
+                    onClick={() => setListingTab('pending')}
+                    className={`pb-2 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${listingTab === 'pending' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Pending Approvals
+                    {pendingCount > 0 && (
+                      <span className="bg-orange-100 text-orange-600 text-xs px-2 py-0.5 rounded-full font-bold">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => setListingTab('rejected')}
+                    className={`pb-2 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${listingTab === 'rejected' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Rejected
+                  </button>
+                </div>
+                <div className="flex gap-2 items-center">
+                   <input type="date" value={dateRange.start} onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="text-sm px-2 py-1 border rounded-lg" />
+                   <span className="text-gray-400">to</span>
+                   <input type="date" value={dateRange.end} onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="text-sm px-2 py-1 border rounded-lg" />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -565,6 +606,31 @@ const AdminDashboard: React.FC = () => {
                 </div>
               ))}
               </div>
+              
+              {/* Pagination Controls */}
+              {totalCount > 0 && (
+                <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+                  <div className="text-sm text-gray-500">
+                    Showing <span className="font-bold text-gray-900">{((activePage - 1) * pageSize) + 1}</span> to <span className="font-bold text-gray-900">{Math.min(activePage * pageSize, totalCount)}</span> of <span className="font-bold text-gray-900">{totalCount}</span> listings
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setActivePage(p => Math.max(1, p - 1))}
+                      disabled={activePage === 1}
+                      className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-transparent"
+                    >
+                      Previous
+                    </button>
+                    <button 
+                      onClick={() => setActivePage(p => p + 1)}
+                      disabled={activePage * pageSize >= totalCount}
+                      className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-transparent"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 

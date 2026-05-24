@@ -13,22 +13,18 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
 
   useEffect(() => {
     const checkAdminStatus = async () => {
-      if (authLoading) return;
-
-      if (!isAuthenticated || !user) {
+      if (authLoading || !isAuthenticated || !user) {
         setIsAdmin(false);
         return;
       }
-
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const role = session?.user?.app_metadata?.role || session?.user?.user_metadata?.role || user.role;
-        
-        if (role === 'Admin') {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
+        // Verify against the database, not JWT claims that the user can influence
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        setIsAdmin(!error && data?.role === 'Admin');
       } catch (err) {
         console.error('Error checking admin session', err);
         setIsAdmin(false);

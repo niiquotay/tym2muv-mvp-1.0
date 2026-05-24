@@ -1,4 +1,5 @@
 import { Country } from '../types';
+import { withCache, cacheKey, CACHE_TTL } from './cacheService';
 
 export interface UserLocationData {
   city: string;
@@ -74,16 +75,20 @@ export function getCountryByCode(code: string): Country | undefined {
  * Detects the user's location and currency using Browser Geolocation or IP-based geolocation.
  */
 export async function detectUserLocation(): Promise<UserLocationData> {
-  const fallback: UserLocationData = {
-    city: 'Accra',
-    country: 'Ghana',
-    countryCode: 'GH',
-    currency: 'GHS',
-    symbol: 'GH₵',
-    formattedAddress: 'Accra, Ghana'
-  };
+  const cacheKeyStr = cacheKey('location', 'user-ip-fallback'); // since it's just a fallback right now
+  
+  return withCache(cacheKeyStr, async () => {
+    const fallback: UserLocationData = {
+      city: 'Accra',
+      country: 'Ghana',
+      countryCode: 'GH',
+      currency: 'GHS',
+      symbol: 'GH₵',
+      formattedAddress: 'Accra, Ghana'
+    };
 
-  return fallback;
+    return fallback;
+  }, CACHE_TTL.LOCATION);
 }
 
 export function getSymbolFromCode(code: string): string {

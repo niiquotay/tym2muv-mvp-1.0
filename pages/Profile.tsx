@@ -8,6 +8,7 @@ import Icon from '../components/Icon';
 import AgentMonetizationDash from '../components/AgentMonetizationDash';
 import { useAuth } from '../context/AuthContext';
 import { useMixedContent } from '../hooks/useMixedContent';
+import { getOptimizedImageUrl } from '../utils/imageOptimization';
 
 const Profile: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -174,7 +175,7 @@ const Profile: React.FC = () => {
                 {/* Avatar */}
                 <div className="relative group">
                     <div className="absolute -inset-1 bg-gradient-to-br from-brand-400 to-fuchsia-500 rounded-full opacity-70 blur group-hover:opacity-100 transition duration-500"></div>
-                    <img src={user.avatar} alt={user.name} referrerPolicy="no-referrer" className="relative w-32 h-32 md:w-44 md:h-44 rounded-full border-4 border-white shadow-xl object-cover bg-slate-100" />
+                    <img src={getOptimizedImageUrl(user.avatar, { width: 300, height: 300, crop: 'thumb' })} alt={user.name} referrerPolicy="no-referrer" className="relative w-32 h-32 md:w-44 md:h-44 rounded-full border-4 border-white shadow-xl object-cover bg-slate-100" />
                     {user.verified && (
                         <div className="absolute bottom-2 right-2 bg-brand-500 text-white p-2 rounded-full border-4 border-white shadow-sm" title="Verified User">
                             <Icon name="check" size={18} />

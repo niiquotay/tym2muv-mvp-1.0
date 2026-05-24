@@ -8,7 +8,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
     <title>tym2muv | Secure Marketplace</title>
-    <script>window.wx = window.wx || {};</script>
+    <script>
+      window.wx = window.wx || {};
+      // Polyfill to make window.fetch writable/configurable even in sandboxed iframes
+      (function() {
+        try {
+          if (window.fetch) {
+            var originalFetch = window.fetch;
+            var fetchStorage = originalFetch;
+            Object.defineProperty(window, 'fetch', {
+              get: function() {
+                return fetchStorage;
+              },
+              set: function(val) {
+                fetchStorage = val;
+              },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {
+          console.warn("Failed to redefine window.fetch with getter/setter proxy:", e);
+        }
+      })();
+    </script>
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

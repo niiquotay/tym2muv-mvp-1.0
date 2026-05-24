@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
 import { CATEGORIES } from '../constants';
 import { SearchFilters } from '../types';
 import LocationSelect from './LocationSelect';
+import useDebounce from '../hooks/useDebounce';
 
 interface SmartSearchInputProps {
   placeholder?: string;
@@ -35,6 +36,16 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = ({
     bathrooms: undefined,
     sortBy: 'newest'
   });
+
+  const debouncedQuery = useDebounce(query, 500);
+
+  // Trigger search when debounced query changes
+  useEffect(() => {
+    // Only trigger if we aren't showing filters. If showing filters, user will click "Apply Filters"
+    if (onSearch && !showFilters) {
+      onSearch(debouncedQuery, filters);
+    }
+  }, [debouncedQuery]);
 
   const handleFilterChange = (field: keyof SearchFilters, value: string) => {
     setFilters(prev => ({ ...prev, [field]: value }));

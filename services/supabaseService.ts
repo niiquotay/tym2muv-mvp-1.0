@@ -1,5 +1,7 @@
 import { supabase } from '../supabaseClient';
 import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review, Payment, ViewRequest } from '../types';
+import { withCache, delCache, invalidateCachePrefix, CACHE_TTL, cacheKey } from './cacheService';
+import { uploadImageToCloudinary } from './imageService';
 
 // --- AUTH SERVICES ---
 export const loginWithEmail = async (email: string, password: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
@@ -77,14 +79,20 @@ const mapProfileToUser = (profileData: any): User => {
 };
 
 export const getUserProfile = async (userId: string): Promise<User | null> => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
+  return withCache(cacheKey('profile', userId), async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+      
+    if (error || !data) return null;
     
-  if (error || !data) return null;
-  return mapProfileToUser(data);
+    const savedQuery = await supabase.from('saved_listings').select('listing_id').eq('user_id', userId);
+    data.savedListings = (savedQuery.data || []).map(r => r.listing_id);
+
+    return mapProfileToUser(data);
+  }, CACHE_TTL.PROFILES);
 };
 
 export const updateUserProfile = async (userId: string, updates: Partial<User>) => {
@@ -96,36 +104,29 @@ export const updateUserProfile = async (userId: string, updates: Partial<User>) 
   
   if (Object.keys(dbUpdates).length > 0) {
     await supabase.from('profiles').update(dbUpdates).eq('id', userId);
+    await delCache(cacheKey('profile', userId));
   }
 };
 
-export const toggleSavedListing = async (userId: string, listingId: string, currentSaved: string[] = []): Promise<string[]> => {
-  const isSaved = currentSaved.includes(listingId);
-  const newSaved = isSaved ? currentSaved.filter(id => id !== listingId) : [...currentSaved, listingId];
-  
-  try {
-    if (isSaved) {
-      await supabase
-        .from('saved_listings')
-        .delete()
-        .eq('user_id', userId)
-        .eq('listing_id', listingId);
-    } else {
-      await supabase
-        .from('saved_listings')
-        .insert({ user_id: userId, listing_id: listingId });
-    }
-    
-    await supabase
-       .from('profiles')
-       .update({ savedListings: newSaved })
-       .eq('id', userId);
-       
-  } catch (error) {
-     console.error('Error toggling saved listing in Supabase:', error);
+export const toggleSavedListing = async (userId: string, listingId: string): Promise<void> => {
+  const { data: existing } = await supabase
+    .from('saved_listings')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('listing_id', listingId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from('saved_listings').delete().eq('id', existing.id);
+  } else {
+    await supabase.from('saved_listings').insert({ user_id: userId, listing_id: listingId });
   }
-  
-  return newSaved;
+  await delCache(cacheKey('profile', userId)); // invalidate profile cache since savedListings changed
+};
+
+export const getSavedListingIds = async (userId: string): Promise<string[]> => {
+  const { data } = await supabase.from('saved_listings').select('listing_id').eq('user_id', userId);
+  return (data || []).map(r => r.listing_id);
 };
 
 export const getAllUsers = async (): Promise<User[]> => {
@@ -136,6 +137,7 @@ export const getAllUsers = async (): Promise<User[]> => {
 
 export const updateUserRole = async (userId: string, role: string) => {
   await supabase.from('profiles').update({ role }).eq('id', userId);
+  await delCache(cacheKey('profile', userId));
 };
 
 // --- LISTING SERVICES ---
@@ -173,35 +175,61 @@ const mapPropertyToListing = (p: any): Listing => ({
   virtualTourUrl: p.virtual_tour_url,
 });
 
-export const getListings = async (filters?: SearchFilters): Promise<{ listings: Listing[], total: number }> => {
-  let query = supabase
-    .from('properties')
-    .select('*, seller:profiles!properties_agent_id_fkey(*)', { count: 'exact' });
+/* DB_INDEXES_REQUIRED: see supabase_production_schema.sql 
+-- Run this once in Supabase SQL Editor:
+CREATE INDEX IF NOT EXISTS idx_properties_location_trgm 
+ON properties USING GIN (location gin_trgm_ops);
 
-  if (!filters?.isAdminQuery) query = query.eq('status', 'active');
-  if (filters?.categoryId) query = query.eq('category_id', filters.categoryId);
-  if (filters?.type) query = query.eq('listing_type', filters.type);
-  if (filters?.propertyType) query = query.eq('property_type', filters.propertyType);
-  if (filters?.bedrooms) query = query.gte('bedrooms', filters.bedrooms);
-  if (filters?.countryCode) query = query.eq('country_code', filters.countryCode);
-  if (filters?.sellerId) query = query.eq('agent_id', filters.sellerId);
-  if (filters?.minPrice) query = query.gte('price', parseInt(filters.minPrice));
-  if (filters?.maxPrice) query = query.lte('price', parseInt(filters.maxPrice));
-  if (filters?.location) query = query.ilike('location', `%${filters.location}%`);
-  if (filters?.page && filters?.limit) {
-    const from = (filters.page - 1) * filters.limit;
-    query = query.range(from, from + filters.limit - 1);
-  }
+CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status);
+CREATE INDEX IF NOT EXISTS idx_properties_country_code ON properties(country_code);
+CREATE INDEX IF NOT EXISTS idx_properties_category ON properties(category_id);
+CREATE INDEX IF NOT EXISTS idx_properties_price ON properties(price);
+CREATE INDEX IF NOT EXISTS idx_properties_agent ON properties(agent_id);
+*/
+export const getListings = async (filters?: SearchFilters): Promise<{ listings: Listing[], total: number, hasMore: boolean }> => {
+  return withCache(cacheKey('listings', filters || 'all'), async () => {
+    let query = supabase
+      .from('properties')
+      .select('*, seller:profiles!properties_agent_id_fkey(*)', { count: 'exact' });
 
-  const { data, error, count } = await query.order('is_premium', { ascending: false }).order('created_at', { ascending: false });
-  if (error) throw error;
-  return { listings: (data || []).map(mapPropertyToListing), total: count || 0 };
+    if (!filters?.isAdminQuery) query = query.eq('status', 'active');
+    else if (filters?.status) query = query.eq('status', filters.status);
+    
+    if (filters?.categoryId) query = query.eq('category_id', filters.categoryId);
+    if (filters?.type) query = query.eq('listing_type', filters.type);
+    if (filters?.propertyType) query = query.eq('property_type', filters.propertyType);
+    if (filters?.bedrooms) query = query.gte('bedrooms', filters.bedrooms);
+    if (filters?.countryCode) query = query.eq('country_code', filters.countryCode);
+    if (filters?.sellerId || filters?.agent_id) query = query.eq('agent_id', filters?.sellerId || filters?.agent_id);
+    if (filters?.minPrice) query = query.gte('price', parseInt(filters.minPrice));
+    if (filters?.maxPrice) query = query.lte('price', parseInt(filters.maxPrice));
+    if (filters?.location) query = query.ilike('location', `%${filters.location}%`);
+    if (filters?.query) query = query.ilike('title', `%${filters.query}%`);
+    if (filters?.startDate) query = query.gte('created_at', filters.startDate);
+    if (filters?.endDate) query = query.lte('created_at', filters.endDate);
+
+    const page = filters?.page || 1;
+    const limit = filters?.limit || filters?.pageSize || 50;
+    
+    const from = (page - 1) * limit;
+    query = query.range(from, from + limit - 1);
+
+    const { data, error, count } = await query.order('is_premium', { ascending: false }).order('created_at', { ascending: false });
+    if (error) throw error;
+    
+    const totalCount = count || 0;
+    const hasMore = from + limit < totalCount;
+    
+    return { listings: (data || []).map(mapPropertyToListing), total: totalCount, hasMore };
+  }, CACHE_TTL.SEARCH);
 };
 
 export const getListingById = async (id: string): Promise<Listing | null> => {
-  const { data, error } = await supabase.from('properties').select('*').eq('id', id).single();
-  if (error || !data) return null;
-  return mapPropertyToListing(data);
+  return withCache(cacheKey('listing', id), async () => {
+    const { data, error } = await supabase.from('properties').select('*').eq('id', id).single();
+    if (error || !data) return null;
+    return mapPropertyToListing(data);
+  }, CACHE_TTL.LISTINGS);
 };
 
 export const createListing = async (listing: Omit<Listing, 'id'>): Promise<string> => {
@@ -233,39 +261,46 @@ export const createListing = async (listing: Omit<Listing, 'id'>): Promise<strin
   }).select('id').single();
   
   if (error) throw error;
+  await invalidateCachePrefix('listings');
   return data.id;
 };
 
 export const updateListing = async (id: string, updates: Partial<Listing>) => {
   const dbUpdates: any = {};
-  if (updates.status) dbUpdates.status = updates.status;
-  // Map other fields as necessary if editing is fully supported
+  if (updates.status !== undefined) dbUpdates.status = updates.status;
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.price !== undefined) dbUpdates.price = updates.price;
+  if (updates.description !== undefined) dbUpdates.description = updates.description;
+  if (updates.location !== undefined) dbUpdates.location = updates.location;
+  if (updates.images !== undefined) dbUpdates.images = updates.images;
+  if (updates.bedrooms !== undefined) dbUpdates.bedrooms = updates.bedrooms;
+  if (updates.bathrooms !== undefined) dbUpdates.bathrooms = updates.bathrooms;
+  if (updates.sqft !== undefined) dbUpdates.sqft = updates.sqft;
+  if (updates.furnished !== undefined) dbUpdates.furnished = updates.furnished;
+  if (updates.parking !== undefined) dbUpdates.parking = updates.parking;
+  if (updates.petsAllowed !== undefined) dbUpdates.pets_allowed = updates.petsAllowed;
+  if (updates.virtualTourUrl !== undefined) dbUpdates.virtual_tour_url = updates.virtualTourUrl;
+  if (updates.isPremium !== undefined) dbUpdates.is_premium = updates.isPremium;
+  
+  if (Object.keys(dbUpdates).length === 0) return;
   const { error } = await supabase.from('properties').update(dbUpdates).eq('id', id);
   if (error) throw error;
+  
+  await invalidateCachePrefix('listings');
+  await delCache(cacheKey('listing', id));
 };
 
 export const deleteListing = async (id: string) => {
   const { error } = await supabase.from('properties').delete().eq('id', id);
   if (error) throw error;
+  
+  await invalidateCachePrefix('listings');
+  await delCache(cacheKey('listing', id));
 };
 
 // --- STORAGE SERVICES ---
 export const uploadImage = async (file: File, path: string, onProgress?: (n: number) => void): Promise<string> => {
-  // Validate file type and size before uploading
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-  if (!allowedTypes.includes(file.type)) throw new Error('Only JPEG, PNG, and WebP images are allowed.');
-  if (file.size > 5 * 1024 * 1024) throw new Error('Image must be smaller than 5MB.');
-
-  onProgress?.(10);
-  const { data, error } = await supabase.storage
-    .from('listings')
-    .upload(path, file, { upsert: false, contentType: file.type });
-
-  if (error) throw error;
-  onProgress?.(100);
-
-  const { data: { publicUrl } } = supabase.storage.from('listings').getPublicUrl(data.path);
-  return publicUrl;
+  return uploadImageToCloudinary(file, onProgress);
 };
 
 // --- CHAT SERVICES ---
@@ -287,30 +322,41 @@ const mapChatRow = (data: any): Chat => ({
 });
 
 export const getChats = (userId: string, callback: (chats: Chat[]) => void) => {
-  let isSubscribed = true;
-  const fetchAndCallback = async () => {
+  let cachedChats: Chat[] = [];
+  
+  const fetchInitial = async () => {
     const { data } = await supabase
       .from('chats')
       .select('*, messages(*, sender:profiles(id, full_name, avatar_url))')
       .contains('participants', [userId])
-      .order('last_message_time', { ascending: false });
-    if (isSubscribed) callback((data || []).map(mapChatRow));
+      .order('last_message_time', { ascending: false })
+      .limit(50); // Add pagination limit
+    cachedChats = (data || []).map(mapChatRow);
+    callback(cachedChats);
   };
-  fetchAndCallback();
+  
+  fetchInitial();
 
   const channel = supabase
     .channel(`user-chats:${userId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, fetchAndCallback)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `participants=cs.{${userId}}` }, fetchAndCallback)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'chats',
+      filter: `participants=cs.{${userId}}`
+    }, (payload) => {
+      // Only refresh the specific chat that changed
+      cachedChats = cachedChats.map(c => 
+        c.id === payload.new.id ? { ...c, lastMessage: payload.new.last_message, lastMessageTime: payload.new.last_message_time } : c
+      );
+      callback([...cachedChats]);
+    })
     .subscribe();
 
-  return () => {
-    isSubscribed = false;
-    supabase.removeChannel(channel);
-  };
+  return () => { supabase.removeChannel(channel); };
 };
 
-const mapMessage = (data: any): ChatMessage => ({
+export const mapMessage = (data: any): ChatMessage => ({
   id: data.id,
   senderId: data.sender_id,
   text: data.content,
@@ -318,24 +364,14 @@ const mapMessage = (data: any): ChatMessage => ({
   isRead: data.is_read || false
 });
 
-export const subscribeToMessages = (chatId: string, callback: (messages: ChatMessage[]) => void) => {
-  // 1. Fetch existing messages first
-  supabase.from('messages')
+export const fetchMessages = async (chatId: string): Promise<ChatMessage[]> => {
+  const { data, error } = await supabase.from('messages')
     .select('*')
     .eq('chat_id', chatId)
-    .order('created_at', { ascending: true })
-    .then(({ data }) => { if (data) callback(data.map(mapMessage)); });
-
-  // 2. Then subscribe to new messages
-  const channel = supabase
-    .channel(`chat-messages:${chatId}`)
-    .on('postgres_changes', {
-      event: 'INSERT', schema: 'public', table: 'messages',
-      filter: `chat_id=eq.${chatId}`
-    }, payload => callback([mapMessage(payload.new)]))
-    .subscribe();
-
-  return () => { supabase.removeChannel(channel); };
+    .order('created_at', { ascending: true });
+  
+  if (error || !data) return [];
+  return data.map(mapMessage);
 };
 
 export const sendMessage = async (chatId: string, senderId: string, text: string) => {
@@ -400,18 +436,21 @@ export const getUserPayments = async (userId: string): Promise<Payment[]> => {
 
 // --- ADMIN SERVICES ---
 export const getAdminStats = async () => {
-  const { data, error } = await supabase.rpc('get_admin_dashboard_stats');
-  if (error) {
-    console.error('Error fetching admin stats:', error);
-    // fallback if rpc fails
-    return {
-      totalUsers: 0, totalListings: 0, totalAds: 0,
-      userRoles: { Admin: 0, Agent: 0, Customer: 0 },
-      listingTypes: { Rent: 0, Sale: 0 },
-      adPerformance: { totalClicks: 0, totalImpressions: 0 }
-    };
-  }
-  return data;
+  return withCache('admin_stats', async () => {
+    const { data, error } = await supabase.rpc('get_dashboard_stats');
+    if (error) {
+      console.error('Error fetching admin stats:', error);
+      // fallback if rpc fails
+      return {
+        totalUsers: 0, totalListings: 0, totalAds: 0,
+        pendingApprovals: 0, revenue: 0,
+        userRoles: { Admin: 0, Agent: 0, Customer: 0 },
+        listingTypes: { Rent: 0, Sale: 0 },
+        adPerformance: { totalClicks: 0, totalImpressions: 0 }
+      };
+    }
+    return data;
+  }, 300); // 5 minute TTL (5 * 60)
 };
 
 // --- MONETIZATION SERVICES ---

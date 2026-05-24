@@ -103,6 +103,10 @@ export function validateListingData(data: any): { valid: boolean; errors: string
 }
 const rateLimits = new Map<string, number[]>();
 
+/**
+ * CLIENT-SIDE rate limit — for UX only, NOT a security control.
+ * Real rate limiting must be enforced at the Supabase/Edge Function level.
+ */
 export function checkRateLimit(action: string, limit: number = 5, windowMs: number = 60000): boolean {
   const now = Date.now();
   const timestamps = rateLimits.get(action) || [];

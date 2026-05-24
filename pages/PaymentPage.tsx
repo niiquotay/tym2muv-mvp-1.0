@@ -6,6 +6,8 @@ import { supabase } from '../supabaseClient';
 import { Listing } from '../types';
 import Icon from '../components/Icon';
 import { getSymbolFromCode } from '../services/location';
+import { generateIdempotencyKey } from '../utils/idempotency';
+import { logger } from '../utils/logger';
 
 const PaymentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,13 +17,7 @@ const PaymentPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [showBankDetails, setShowBankDetails] = useState(false);
-
-  const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-  if (!PAYSTACK_KEY) throw new Error('Paystack public key not configured.');
-  
-  if (import.meta.env.PROD && !PAYSTACK_KEY.startsWith('pk_live_')) {
-    console.error('WARNING: Using Paystack test key in production!');
-  }
+  const [idempotencyKey, setIdempotencyKey] = useState<string>('');
 
   useEffect(() => {
     if (!user) {
@@ -32,6 +28,9 @@ const PaymentPage: React.FC = () => {
       if (id) {
         const data = await getListingById(id);
         setListing(data);
+        if (data && user) {
+          setIdempotencyKey(await generateIdempotencyKey(user.id, data.id, data.price));
+        }
       }
     };
     fetchListing();
@@ -56,8 +55,44 @@ const PaymentPage: React.FC = () => {
       loadPaystackScript();
     }, []);
 
+    const processPaymentWithRetry = async (reference: string, retries = 3, delay = 1000): Promise<void> => {
+      try {
+        const { data, error } = await supabase.functions.invoke('process-payment', {
+          body: { reference, listingId: listing!.id, idempotencyKey }
+        });
+        
+        // 409 Conflict can be handled if idempotency checks out
+        if (error || !data?.success) {
+           throw new Error(data?.error || 'Payment verification failed');
+        }
+        setIsSuccess(true);
+      } catch (err: any) {
+        logger.error("Payment processing error", { error: err, reference, idempotencyKey });
+        
+        // Only retry on network errors or 5xx, wait, edge function invoke throws error if not 2xx.
+        // We'll just retry for any failure until retries exhausted.
+        if (retries > 0) {
+           logger.warn(`Retrying payment verification... ${retries} attempts left`);
+           await new Promise(resolve => setTimeout(resolve, delay));
+           return processPaymentWithRetry(reference, retries - 1, delay * 2); // Exponential backoff
+        }
+        
+        throw err;
+      }
+    };
+
     const handlePaystackPayment = async () => {
-      if (!listing || !user) return;
+      if (!listing || !user || !idempotencyKey) return;
+      
+      const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+      if (!PAYSTACK_KEY) {
+        alert('Payment is not configured. Please contact support.');
+        return;
+      }
+      
+      if (import.meta.env.PROD && !PAYSTACK_KEY.startsWith('pk_live_')) {
+        console.error('WARNING: Using Paystack test key in production!');
+      }
       
       const loaded = await loadPaystackScript();
       if (!loaded || !(window as any).PaystackPop) {
@@ -67,18 +102,14 @@ const PaymentPage: React.FC = () => {
       
       const handler = (window as any).PaystackPop.setup({
         key: PAYSTACK_KEY,
-        email: user.email || 'customer@example.com',
+        email: user.email || user.socials?.email || 'customer@example.com',
         amount: listing.price * 100, // Amount in kobo/pesewas
         currency: listing.currency || 'GHS',
-        ref: `TYM_${Math.floor(Math.random() * 1000000000 + 1)}`,
+        ref: `TYM_${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`,
         callback: async (response: any) => {
           setIsProcessing(true);
         try {
-          const { data, error } = await supabase.functions.invoke('process-payment', {
-            body: { reference: response.reference, listingId: listing.id }
-          });
-          if (error || !data?.success) throw new Error('Payment verification failed');
-          setIsSuccess(true);
+          await processPaymentWithRetry(response.reference);
         } catch (err) {
           console.error("Payment failed", err);
           alert('Payment could not be verified. Please contact support with reference: ' + response.reference);

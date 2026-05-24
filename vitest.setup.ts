@@ -9,6 +9,25 @@ afterEach(() => {
 
 // Mock browser globals if needed
 if (typeof window !== 'undefined') {
+  // Make window.fetch writable and configurable to avoid TypeError: Cannot set property fetch of #<Window> which has only a getter
+  if (window.fetch) {
+    try {
+      let currentFetch = window.fetch;
+      Object.defineProperty(window, 'fetch', {
+        get() {
+          return currentFetch;
+        },
+        set(val) {
+          currentFetch = val;
+        },
+        configurable: true,
+        enumerable: true
+      });
+    } catch (e) {
+      console.warn("Failed to redefine window.fetch as writable:", e);
+    }
+  }
+
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: vi.fn().mockImplementation(query => ({
@@ -22,4 +41,22 @@ if (typeof window !== 'undefined') {
       dispatchEvent: vi.fn(),
     })),
   });
+
+  class MockIntersectionObserver {
+    observe = vi.fn();
+    disconnect = vi.fn();
+    unobserve = vi.fn();
+  }
+  Object.defineProperty(window, 'IntersectionObserver', {
+    writable: true,
+    configurable: true,
+    value: MockIntersectionObserver
+  });
 }
+
+// Mock Supabase client for tests
+import { mockSupabase } from './__tests__/mocks/supabase';
+
+vi.mock('./supabaseClient', () => ({
+  supabase: mockSupabase
+}));

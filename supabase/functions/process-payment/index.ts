@@ -6,9 +6,12 @@ const supabaseAdmin = createClient(
 );
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN')! || '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Global rate limiting map (for Deno memory during invocation)
+const rateLimits = new Map<string, number>();
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -35,27 +38,54 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { reference, listingId } = await req.json();
+    // 1.5 Rate Limiting (Server-side)
+    const now = Date.now();
+    const lastRequest = rateLimits.get(user.id) || 0;
+    if (now - lastRequest < 60000) { // 60 seconds cooldown
+      return new Response(
+        JSON.stringify({ error: "Too many payment attempts. Please wait 60 seconds." }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    rateLimits.set(user.id, now);
 
-    if (!reference || !listingId) {
+    const { reference, listingId, idempotencyKey } = await req.json();
+
+    if (!reference || !listingId || !idempotencyKey) {
       return new Response(
         JSON.stringify({ error: "Missing payment parameters" }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. Check Idempotency
-    const { data: existingPayment } = await supabaseAdmin
-      .from('payments')
-      .select('id')
-      .eq('reference_id', reference)
+    // 2. Check Idempotency via payment_attempts
+    const { data: attempt } = await supabaseAdmin
+      .from('payment_attempts')
+      .select('id, status, response')
+      .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
 
-    if (existingPayment) {
-      return new Response(
-        JSON.stringify({ error: "Payment already processed", success: false }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (attempt) {
+        if (attempt.status === 'succeeded') {
+            return new Response(
+              JSON.stringify({ success: true, data: attempt.response, cached: true }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+        if (attempt.status === 'pending') {
+            // Already processing, but we can perhaps proceed to verify if it's stuck, or return 409
+            // A realistic approach: proceed to paystack verification below to ensure it's not complete there.
+        }
+    } else {
+        // Insert new attempt as pending
+        await supabaseAdmin.from('payment_attempts').insert({
+            idempotency_key: idempotencyKey,
+            user_id: user.id,
+            listing_id: listingId,
+            reference_id: reference,
+            amount: 0, // We'll update this after verification
+            status: 'pending'
+        });
     }
 
     // 3. Verify Payment via Paystack
@@ -72,10 +102,17 @@ Deno.serve(async (req) => {
     });
 
     const verifyData = await verifyReq.json();
+    const amountOut = verifyData?.data?.amount ? verifyData.data.amount / 100 : 0;
 
     if (!verifyData.status || verifyData.data.status !== 'success') {
+      await supabaseAdmin.from('payment_attempts').update({
+         status: 'failed',
+         response: verifyData,
+         amount: amountOut
+      }).eq('idempotency_key', idempotencyKey);
+      
       return new Response(
-        JSON.stringify({ error: "Payment failed verification", success: false }),
+        JSON.stringify({ error: "Payment failed verification", success: false, reference }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -88,12 +125,12 @@ Deno.serve(async (req) => {
 
     if (listingError) throw listingError;
 
-    // 5. Insert payment record
+    // 5. Insert payment record (if not exists) and update attempt
     const { data, error } = await supabaseAdmin
       .from('payments')
       .insert({
         user_id: user.id,
-        amount: verifyData.data.amount / 100, // Paystack amount is in pesewas/kobo
+        amount: amountOut, // Paystack amount is in pesewas/kobo
         currency: verifyData.data.currency,
         status: 'completed',
         purpose: 'listing_fee',
@@ -102,6 +139,12 @@ Deno.serve(async (req) => {
       })
       .select()
       .single();
+
+    await supabaseAdmin.from('payment_attempts').update({
+       status: 'succeeded',
+       response: verifyData,
+       amount: amountOut
+    }).eq('idempotency_key', idempotencyKey);
 
     if (error) throw error;
 

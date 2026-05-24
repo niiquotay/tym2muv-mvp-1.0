@@ -1,52 +1,54 @@
-type LogLevel = 'info' | 'warn' | 'error';
-type LogContext = Record<string, unknown>;
+import { datadogLogs } from '@datadog/browser-logs';
 
-class Logger {
-  private formatMessage(level: LogLevel, message: string, context?: LogContext) {
-    const timestamp = new Date().toISOString();
-    const env = import.meta.env.MODE;
-    const version = import.meta.env.VITE_APP_VERSION || 'unknown';
-    return JSON.stringify({
-      timestamp,
-      level,
-      env,
-      version,
-      message,
-      ...context
-    });
-  }
+const isProd = import.meta.env.PROD;
+const DATADOG_CLIENT_TOKEN = import.meta.env.VITE_DATADOG_CLIENT_TOKEN;
+const DATADOG_SITE = import.meta.env.VITE_DATADOG_SITE || 'datadoghq.com';
+const ENV = import.meta.env.VITE_ENV || 'development';
 
-  info(message: string, context?: LogContext) {
-    if (import.meta.env.PROD) return;
-    console.info(this.formatMessage('info', message, context));
-  }
-
-  warn(message: string, context?: LogContext) {
-    console.warn(this.formatMessage('warn', message, context));
-  }
-
-  error(error: unknown, context?: LogContext) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    const stack = error instanceof Error ? error.stack : undefined;
-    
-    const formattedLog = this.formatMessage('error', errorMsg, {
-      stack,
-      ...context
-    });
-    
-    console.error(formattedLog);
-
-    // Integrate with external reporting tools here (e.g., Sentry)
-    if (import.meta.env.PROD && typeof window !== 'undefined') {
-        const errorEndpoint = '/api/log'; // or Sentry DSN
-        // we could do a fire-and-forget fetch here if we had a dedicated endpoint
-        // fetch(errorEndpoint, { method: 'POST', body: formattedLog, keepalive: true }).catch(() => {});
-    }
-  }
-
-  trackPageView(page: string) {
-    this.info(`Page view: ${page}`);
-  }
+if (DATADOG_CLIENT_TOKEN) {
+  datadogLogs.init({
+    clientToken: DATADOG_CLIENT_TOKEN,
+    site: DATADOG_SITE,
+    forwardErrorsToLogs: true,
+    sessionSampleRate: 100,
+    service: 'tym2muv-web',
+    env: ENV,
+  });
 }
 
-export const logger = new Logger();
+// Helper to attach user context to logs/RUM internally from auth context if needed later
+// datadogLogs.logger.setContext({ userId, role })
+
+export const logger = {
+  debug: (message: string, context?: Record<string, any>) => {
+    if (!isProd) {
+       console.debug('[DEBUG]', message, context);
+    }
+    if (DATADOG_CLIENT_TOKEN) {
+      datadogLogs.logger.debug(message, context);
+    }
+  },
+  error: (error: any, context?: Record<string, any>) => {
+    const errorMsg = error?.message || error;
+    if (isProd) {
+      console.error('[ERROR]', errorMsg, context);
+    } else {
+      console.error('[ERROR]', error, context);
+    }
+    if (DATADOG_CLIENT_TOKEN) {
+       datadogLogs.logger.error(errorMsg, { error, ...context });
+    }
+  },
+  warn: (message: string, context?: Record<string, any>) => {
+    if (!isProd) console.warn('[WARN]', message, context);
+    if (DATADOG_CLIENT_TOKEN) {
+      datadogLogs.logger.warn(message, context);
+    }
+  },
+  info: (message: string, context?: Record<string, any>) => {
+    if (!isProd) console.info('[INFO]', message, context);
+    if (DATADOG_CLIENT_TOKEN) {
+       datadogLogs.logger.info(message, context);
+    }
+  }
+};

@@ -74,8 +74,14 @@ export interface SearchFilters {
   sortBy?: string;
   page?: number;
   limit?: number;
+  pageSize?: number;
   countryCode?: string;
   sellerId?: string;
+  agent_id?: string;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+  query?: string;
   isAdminQuery?: boolean;
 }
 
@@ -84,6 +90,7 @@ export type UserRole = 'Agent' | 'Customer' | 'Admin' | 'Tenant';
 export interface User {
   id: string;
   name: string;
+  email?: string;
   avatar: string;
   rating: number;
   reviewCount: number;

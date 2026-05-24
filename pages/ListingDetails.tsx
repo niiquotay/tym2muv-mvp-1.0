@@ -13,6 +13,7 @@ import SafetyDisclaimer from '../components/SafetyDisclaimer';
 import ErrorBanner from '../components/ErrorBanner';
 import MortgageCalculator from '../components/MortgageCalculator';
 import { getSymbolFromCode } from '../services/location';
+import { getOptimizedImageUrl } from '../utils/imageOptimization';
 import SkeletonCard from '../components/SkeletonCard';
 
 const ListingDetails: React.FC = () => {
@@ -206,7 +207,7 @@ const ListingDetails: React.FC = () => {
     setIsSaved(!previousState);
     
     try {
-      const newSaved = await toggleSavedListing(user.id, listing.id, user.savedListings || []);
+      await toggleSavedListing(user.id, listing.id);
       // If we had a mechanism to update the AuthContext's user directly, we would do it here.
       // For now, it will sync next time auth state loads, or we can just rely on local state.
       setToastMessage(previousState ? "Removed from saved" : "Saved to favorites");
@@ -412,7 +413,7 @@ const ListingDetails: React.FC = () => {
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <img 
-                    src={seller?.avatar} 
+                    src={getOptimizedImageUrl(seller?.avatar, { width: 96, height: 96, crop: 'thumb' })} 
                     alt={seller?.name} 
                     className="w-12 h-12 rounded-lg object-cover border-2 border-white shadow-md group-hover:shadow-lg transition-all"
                     referrerPolicy="no-referrer"
@@ -484,7 +485,10 @@ const ListingDetails: React.FC = () => {
               <AnimatePresence mode="wait">
                 <motion.img 
                   key={activeImage}
-                  src={images[activeImage]} 
+                  src={getOptimizedImageUrl(images[activeImage], { width: 1200 })}
+                  srcSet={`${getOptimizedImageUrl(images[activeImage], { width: 600 })} 600w, ${getOptimizedImageUrl(images[activeImage], { width: 800 })} 800w, ${getOptimizedImageUrl(images[activeImage], { width: 1200 })} 1200w`}
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  loading="lazy"
                   alt={listing.title} 
                   initial={{ opacity: 0, scale: 1.02 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -568,7 +572,8 @@ const ListingDetails: React.FC = () => {
                     }`}
                   >
                     <img 
-                      src={img} 
+                      src={getOptimizedImageUrl(img, { width: 200, height: 200, crop: 'fill' })} 
+                      loading="lazy"
                       alt="" 
                       className="w-full h-full object-cover" 
                       referrerPolicy="no-referrer" 

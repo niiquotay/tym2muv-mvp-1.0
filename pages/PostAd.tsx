@@ -108,9 +108,7 @@ const PostAd: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    // Sanitize text inputs
-    const sanitizedValue = (name === 'description' || name === 'title') ? sanitizeString(value) : value;
-    setFormData(prev => ({ ...prev, [name]: sanitizedValue }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleLocationChange = (value: string) => {
