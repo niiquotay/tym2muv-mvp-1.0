@@ -159,7 +159,7 @@ const mapPropertyToListing = (p: any): Listing => ({
   expiryDate: p.expiry_date,
   sellerId: p.agent_id,
   description: p.description,
-  status: p.status,
+  status: p.status === 'approved' ? 'active' : p.status,
   type: p.listing_type,
   propertyType: p.property_type,
   bedrooms: p.bedrooms,
@@ -190,10 +190,14 @@ export const getListings = async (filters?: SearchFilters): Promise<{ listings: 
   return withCache(cacheKey('listings', filters || 'all'), async () => {
     let query = supabase
       .from('properties')
-      .select('*, seller:profiles!properties_agent_id_fkey(*)', { count: 'exact' });
+      .select('*, seller:profiles!agent_id(*)', { count: 'exact' });
 
-    if (!filters?.isAdminQuery) query = query.eq('status', 'active');
-    else if (filters?.status) query = query.eq('status', filters.status);
+    if (!filters?.isAdminQuery) {
+      query = query.eq('status', 'approved');
+    } else if (filters?.status) {
+      const dbStatus = filters.status === 'active' ? 'approved' : filters.status;
+      query = query.eq('status', dbStatus);
+    }
     
     if (filters?.categoryId) query = query.eq('category_id', filters.categoryId);
     if (filters?.type) query = query.eq('listing_type', filters.type);
@@ -245,7 +249,7 @@ export const createListing = async (listing: Omit<Listing, 'id'>): Promise<strin
     subcategory_id: listing.subcategoryId,
     agent_id: listing.sellerId,
     description: listing.description,
-    status: listing.status || 'pending',
+    status: listing.status === 'active' ? 'approved' : (listing.status || 'pending'),
     listing_type: listing.type,
     property_type: listing.propertyType,
     bedrooms: listing.bedrooms,
@@ -267,7 +271,9 @@ export const createListing = async (listing: Omit<Listing, 'id'>): Promise<strin
 
 export const updateListing = async (id: string, updates: Partial<Listing>) => {
   const dbUpdates: any = {};
-  if (updates.status !== undefined) dbUpdates.status = updates.status;
+  if (updates.status !== undefined) {
+    dbUpdates.status = updates.status === 'active' ? 'approved' : updates.status;
+  }
   if (updates.title !== undefined) dbUpdates.title = updates.title;
   if (updates.price !== undefined) dbUpdates.price = updates.price;
   if (updates.description !== undefined) dbUpdates.description = updates.description;

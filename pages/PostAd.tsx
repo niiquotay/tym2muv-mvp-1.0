@@ -24,6 +24,14 @@ const PostAd: React.FC = () => {
   const [suggestedPriceRange, setSuggestedPriceRange] = useState<{min: number, max: number} | null>(null);
 
   const [step, setStep] = useState(1);
+  
+  // Redirect buyers to create a vendor account
+  useEffect(() => {
+    if (user && user.role !== 'Agent' && user.role !== 'Admin') {
+      navigate('/create-vendor', { replace: true });
+    }
+  }, [user, navigate]);
+
   const [formData, setFormData] = useState({
     categoryId: '',
     categoryName: '',

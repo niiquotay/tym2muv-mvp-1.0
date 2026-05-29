@@ -116,3 +116,13 @@ The `admin_logs` table allows tracking of all platform overrides.
 Admin dashboards will query `rpc()` (PostgreSQL Remote Procedure Calls) to get summarized counts (Total Revenue, Active Users, Pending Verifications) instead of iterating over large tables in the browser.
 
 See `supabase_production_schema.sql` for the complete execute-ready database definition.
+
+---
+
+## STEP 11 — AUTHENTICATION PROTECTION & COMPROMISED PASSWORDS
+
+To safeguard user accounts against credential stuffing and brute-force attacks, we have hardened the authentication Layer:
+- **Leaked Password Protection:** Configured `config.toml` to mandate leaked password protection checking against the HaveIBeenPwned database (`leaked_passwords_enabled = true`).
+- **Complexity Guidelines:** Established complex password rules demanding a combination of lowercase, uppercase, digits, and special characters.
+- **Production Verification:** Ensure the setting is active in the Supabase production console: *Authentication -> Providers -> Email -> Password Security -> Enable leaked password protection*.
+

@@ -13,6 +13,7 @@ import { logger } from './utils/logger';
 const Home = lazy(() => import('./pages/Home'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const PostAd = lazy(() => import('./pages/PostAd'));
+const CreateVendor = lazy(() => import('./pages/CreateVendor'));
 const ListingDetails = lazy(() => import('./pages/ListingDetails'));
 const PaymentPage = lazy(() => import('./pages/PaymentPage'));
 const Profile = lazy(() => import('./pages/Profile'));
@@ -163,6 +164,11 @@ const App: React.FC = () => {
                   <Route path="/post" element={
                     <ProtectedRoute>
                       <PostAd />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/create-vendor" element={
+                    <ProtectedRoute>
+                      <CreateVendor />
                     </ProtectedRoute>
                   } />
                   <Route path="/profile/:userId" element={

@@ -11,6 +11,7 @@ interface AuthContextType {
   isAuthReady: boolean;
   isAuthenticated: boolean;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,6 +24,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     await backendLogout();
+  };
+
+  const refreshUser = async () => {
+    if (supabaseUser) {
+      const profile = await getUserProfile(supabaseUser.id);
+      setUser({ ...profile, email: supabaseUser.email } as any);
+    }
   };
 
   useEffect(() => {
@@ -60,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, supabaseUser, loading, isAuthReady, isAuthenticated, logout }}>
+    <AuthContext.Provider value={{ user, supabaseUser, loading, isAuthReady, isAuthenticated, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

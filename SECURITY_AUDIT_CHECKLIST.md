@@ -22,6 +22,13 @@ Ensure the following checks are run before major Production deployments:
 - [x] **XSS (Cross-Site Scripting):** Rely entirely on React rendering (auto-escapes), block `dangerouslySetInnerHTML`.
 - [x] **Cloudflare Proxying:** Direct raw endpoints are hidden, all egress goes through the Vercel/Cloudflare barrier.
 
+## Supabase Auth & Credential Hardening
+Ensure the identity provider layer is protected against credential stuffing and compromised authentication details:
+
+- [x] **Leaked Password Protection:** Implemented in the local/development config (`supabase/config.toml`) under `[auth.security] leaked_passwords_enabled = true`.
+- [x] **HaveIBeenPwned Check Strategy:** Production projects must have this setting checked in the **Supabase Dashboard** (under *Authentication* -> *Providers* -> *Email* -> *Password Security*) to automatically deny vulnerable/compromised passwords.
+- [x] **Password Complexity Policies:** Minimum password length of 8 with mixed character constraints (enforced in config).
+
 ## CSP Violation Logging
 - We have enabled the endpoint `/api/csp-report`.
 - Violations are automatically forwarded into **Datadog Logs**. 

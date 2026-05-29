@@ -180,15 +180,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <CountrySelector />
 
                     {/* Post Button */}
-                    {(!isAuthenticated || user?.role === 'Agent' || user?.role === 'Admin') && (
-                      <Link 
-                        to="/post" 
-                        className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white px-2.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold text-sm transition-all shadow-lg shadow-brand-500/30 active:scale-95"
-                      >
-                        <Icon name="plus" size={16} strokeWidth={3} className="sm:w-[18px] sm:h-[18px]" />
-                        <span className="hidden sm:inline">Post</span>
-                      </Link>
-                    )}
+                    <Link 
+                      to={isAuthenticated && (user?.role !== 'Agent' && user?.role !== 'Admin') ? "/create-vendor" : "/post"} 
+                      className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white px-2.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold text-sm transition-all shadow-lg shadow-brand-500/30 active:scale-95"
+                    >
+                      <Icon name="plus" size={16} strokeWidth={3} className="sm:w-[18px] sm:h-[18px]" />
+                      <span className="hidden sm:inline">Post</span>
+                    </Link>
 
                     {/* Auth */}
                     {isAuthenticated ? (
