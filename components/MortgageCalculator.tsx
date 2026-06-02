@@ -6,9 +6,10 @@ import { getSymbolFromCode } from '../services/location';
 
 interface MortgageCalculatorProps {
   price: number;
+  currency?: string;
 }
 
-const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({ price }) => {
+const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({ price, currency }) => {
   const [downPayment, setDownPayment] = useState(price * 0.2);
   const [interestRate, setInterestRate] = useState(6.5);
   const [loanTerm, setLoanTerm] = useState(30);
@@ -30,7 +31,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({ price }) => {
     }
   }, [price, downPayment, interestRate, loanTerm]);
 
-  const currencySymbol = getSymbolFromCode(userLocation.countryCode === 'GH' ? 'GHS' : userLocation.countryCode === 'NG' ? 'NGN' : 'USD');
+  const currencySymbol = getSymbolFromCode(currency || (userLocation.countryCode === 'GH' ? 'GHS' : userLocation.countryCode === 'NG' ? 'NGN' : 'USD'));
 
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">

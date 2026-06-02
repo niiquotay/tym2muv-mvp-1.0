@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AdCard from '../components/AdCard';
 import { 
   Users, 
   Home, 
@@ -39,6 +40,7 @@ import {
   getMonetizationAds, 
   getAdminStats, 
   updateUserRole, 
+  updateUserProfile,
   deleteListing,
   updateListing,
   createMonetizationAd,
@@ -52,6 +54,7 @@ import {
 } from '../utils/seedMockData';
 import { User, Listing, Monetization } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { getSymbolFromCode } from '../services/location';
 
 const COLORS = ['#ea580c', '#3b82f6', '#10b981', '#f59e0b'];
 
@@ -75,6 +78,34 @@ const AdminDashboard: React.FC = () => {
   const [showAdModal, setShowAdModal] = useState(false);
   const [editingAd, setEditingAd] = useState<Monetization | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Live preview interactive state helpers
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [previewDesc, setPreviewDesc] = useState('');
+  const [previewCta, setPreviewCta] = useState('');
+  const [previewColor, setPreviewColor] = useState('from-brand-600 to-indigo-600');
+  const [previewType, setPreviewType] = useState<'standard' | 'tall'>('tall');
+  const [previewImage, setPreviewImage] = useState('');
+
+  useEffect(() => {
+    if (showAdModal) {
+      if (editingAd) {
+        setPreviewTitle(editingAd.title || '');
+        setPreviewDesc(editingAd.description || '');
+        setPreviewCta(editingAd.cta || 'Learn More');
+        setPreviewColor(editingAd.color || 'from-brand-600 to-indigo-600');
+        setPreviewType(editingAd.type === 'tall' ? 'tall' : 'standard');
+        setPreviewImage(editingAd.image || '');
+      } else {
+        setPreviewTitle('Luxury Studio Condo');
+        setPreviewDesc('Special offers and zero down-payment mortgages on urban studios!');
+        setPreviewCta('Grab Deal');
+        setPreviewColor('from-brand-600 to-fuchsia-600');
+        setPreviewType('tall');
+        setPreviewImage('https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80');
+      }
+    }
+  }, [editingAd, showAdModal]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
@@ -201,6 +232,15 @@ const AdminDashboard: React.FC = () => {
     const newStatus = currentStatus === 'pending' ? 'active' : currentStatus === 'active' ? 'rejected' : 'active';
     await updateListing(id, { status: newStatus });
     fetchData();
+  };
+
+  const handleToggleVerifyUser = async (userId: string, currentVerified: boolean) => {
+    try {
+      await updateUserProfile(userId, { verified: !currentVerified });
+      fetchData();
+    } catch (err) {
+      console.error('Failed to toggle verification status:', err);
+    }
   };
 
   const filteredUsers = users.filter(u => 
@@ -447,25 +487,26 @@ const AdminDashboard: React.FC = () => {
               animate={{ opacity: 1 }}
               className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
             >
-              <table className="w-full text-left">
+              <table className="w-full text-left font-sans">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="px-6 py-4 text-sm font-bold text-gray-600">User</th>
-                    <th className="px-6 py-4 text-sm font-bold text-gray-600">Role</th>
-                    <th className="px-6 py-4 text-sm font-bold text-gray-600">Location</th>
-                    <th className="px-6 py-4 text-sm font-bold text-gray-600">Joined</th>
-                    <th className="px-6 py-4 text-sm font-bold text-gray-600">Actions</th>
+                    <th className="px-6 py-4 text-xs font-black uppercase text-slate-500 tracking-wider">User Profile</th>
+                    <th className="px-6 py-4 text-xs font-black uppercase text-slate-500 tracking-wider">Access Role</th>
+                    <th className="px-6 py-4 text-xs font-black uppercase text-slate-500 tracking-wider">Verification Status</th>
+                    <th className="px-6 py-4 text-xs font-black uppercase text-slate-500 tracking-wider">Resident Location</th>
+                    <th className="px-6 py-4 text-xs font-black uppercase text-slate-500 tracking-wider">Joined Date</th>
+                    <th className="px-6 py-4 text-xs font-black uppercase text-slate-500 tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {filteredUsers.map(user => (
-                    <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <img src={user.avatar || 'https://via.placeholder.com/40'} alt="" className="w-10 h-10 rounded-full object-cover" />
+                          <img src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&h=80'} alt="" className="w-10 h-10 rounded-full object-cover border border-slate-100 shadow-sm" />
                           <div>
-                            <div className="font-bold text-gray-900">{user.name}</div>
-                            <div className="text-xs text-gray-500">{user.socials?.email}</div>
+                            <div className="font-bold text-gray-950 text-sm">{user.name}</div>
+                            <div className="text-xs text-slate-500 font-medium">{user.socials?.email}</div>
                           </div>
                         </div>
                       </td>
@@ -473,7 +514,7 @@ const AdminDashboard: React.FC = () => {
                         <select 
                           value={user.role}
                           onChange={(e) => handleRoleChange(user.id, e.target.value as any)}
-                          className={`text-xs font-bold px-3 py-1 rounded-full border-none focus:ring-2 focus:ring-orange-500 ${
+                          className={`text-xs font-black px-3 py-1 rounded-full border-none focus:ring-2 focus:ring-orange-500 cursor-pointer ${
                             user.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
                             user.role === 'Agent' ? 'bg-blue-100 text-blue-700' :
                             'bg-gray-100 text-gray-700'
@@ -484,11 +525,24 @@ const AdminDashboard: React.FC = () => {
                           <option value="Admin">Admin</option>
                         </select>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{user.location || 'N/A'}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{user.memberSince}</td>
                       <td className="px-6 py-4">
-                        <button className="p-2 text-gray-400 hover:text-gray-600">
-                          <MoreVertical size={18} />
+                        <button
+                          onClick={() => handleToggleVerifyUser(user.id, !!user.verified)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black transition-all border shadow-sm active:scale-95 ${
+                            user.verified 
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100' 
+                            : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${user.verified ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                          {user.verified ? 'Verified Agent' : 'Standard Account'}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-slate-600">{user.location || 'Global Corridor'}</td>
+                      <td className="px-6 py-4 text-xs text-slate-500 font-medium">{user.memberSince}</td>
+                      <td className="px-6 py-4">
+                        <button className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
+                          <MoreVertical size={16} />
                         </button>
                       </td>
                     </tr>
@@ -553,7 +607,7 @@ const AdminDashboard: React.FC = () => {
                     </div>
                     <div className="absolute bottom-4 left-4">
                       <span className="px-3 py-1 bg-orange-600 text-white text-xs font-bold rounded-full shadow-lg">
-                        {listing.currency} {listing.price.toLocaleString()}
+                        {getSymbolFromCode(listing.currency || 'USD')}{listing.price.toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -688,7 +742,7 @@ const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="grid grid-cols-3 gap-4 mb-4">
                       <div className="bg-gray-50 p-3 rounded-xl">
                         <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Impressions</div>
                         <div className="text-lg font-bold text-gray-900">{ad.impressions || 0}</div>
@@ -705,7 +759,27 @@ const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                    {/* Miniature AdCard Visual Preview */}
+                    <div className="mb-4 p-4 bg-slate-50 border border-slate-150/60 rounded-2xl">
+                      <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-2 flex justify-between">
+                        <span>Portal Placement Preview</span>
+                        <span className="text-slate-500 font-bold lowercase">{ad.type === 'tall' ? 'tall grid ad' : 'standard flow ad'}</span>
+                      </div>
+                      <div className="max-w-[170px] mx-auto aspect-[3/4] bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+                        <AdCard
+                          id={ad.id}
+                          type={ad.type === 'tall' ? 'tall' : 'standard'}
+                          title={ad.title}
+                          description={ad.description || 'No description text provided'}
+                          cta={ad.cta || 'Learn More'}
+                          image={ad.image}
+                          color={ad.color || 'from-brand-600 to-indigo-600'}
+                          link={ad.link}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-50">
                       <a 
                         href={ad.link} 
                         target="_blank" 
@@ -741,142 +815,229 @@ const AdminDashboard: React.FC = () => {
 
       {/* Ad Modal */}
       {showAdModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden"
+            initial={{ opacity: 0, scale: 0.98, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden my-4 max-h-[92vh] flex flex-col"
           >
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-gray-900">
-                {editingAd ? 'Edit Campaign' : 'Create New Campaign'}
-              </h3>
-              <button onClick={() => setShowAdModal(false)} className="text-gray-400 hover:text-gray-600">
-                <XCircle size={24} />
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-slate-50/80">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                  {editingAd ? 'Edit Sponsored Campaign' : 'Design Paid Advertisement'}
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">Configure live, tracking-enabled ad placements on user home corridors</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowAdModal(false)} 
+                className="p-1.5 hover:bg-slate-250 text-slate-400 hover:text-slate-700 rounded-full transition-colors focus:ring-2 focus:ring-orange-500 outline-none"
+              >
+                <XCircle size={22} />
               </button>
             </div>
-            <form onSubmit={handleAdSubmit} className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Campaign Title</label>
-                  <input 
-                    name="title" 
-                    defaultValue={editingAd?.title}
+
+            {/* Split Content panel */}
+            <div className="grid grid-cols-1 md:grid-cols-12 overflow-hidden flex-1">
+              
+              {/* Left Form (7 cols) */}
+              <form onSubmit={handleAdSubmit} className="md:col-span-7 p-6 space-y-4 overflow-y-auto max-h-[64vh] sm:max-h-[70vh] no-scrollbar">
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Campaign Title</label>
+                    <input 
+                      name="title" 
+                      value={previewTitle}
+                      onChange={(e) => setPreviewTitle(e.target.value)}
+                      required
+                      placeholder="e.g. 5% Mortgage Rate Deal"
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs text-slate-800 font-medium" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Visual Type / Height</label>
+                    <select 
+                      name="type" 
+                      value={previewType}
+                      onChange={(e) => setPreviewType(e.target.value as any)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs text-slate-850 font-bold bg-white"
+                    >
+                      <option value="card">Standard Card (Category corridor)</option>
+                      <option value="tall">Tall Card (Home grid - High Priority)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">CTA Button text</label>
+                    <input 
+                      name="cta" 
+                      value={previewCta}
+                      onChange={(e) => setPreviewCta(e.target.value)}
+                      placeholder="e.g. Check Deals, Apply Now"
+                      className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs text-slate-800 font-medium" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Landing Page URL (Hyperlink)</label>
+                    <input 
+                      name="link" 
+                      defaultValue={editingAd?.link}
+                      required
+                      placeholder="e.g. https://caliberdesk.com/lp"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-mono text-blue-600 font-medium" 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Ad Description / Pitch Copy</label>
+                  <textarea 
+                    name="description" 
+                    value={previewDesc}
+                    onChange={(e) => setPreviewDesc(e.target.value)}
                     required
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none" 
+                    rows={2}
+                    placeholder="Provide a highly clickable marketing slogan describing the sponsor asset..."
+                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs text-slate-700 font-medium leading-relaxed resize-none" 
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Type</label>
-                  <select 
-                    name="type" 
-                    defaultValue={editingAd?.type || 'card'}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Gradient Accent Style</label>
+                  <input type="hidden" name="color" value={previewColor} />
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {[
+                      { name: 'Sunset Red', gradient: 'from-orange-600 to-fuchsia-600' },
+                      { name: 'Ocean Blue', gradient: 'from-blue-600 to-indigo-600' },
+                      { name: 'Emerald', gradient: 'from-emerald-600 to-teal-600' },
+                      { name: 'Golden Amber', gradient: 'from-orange-600 to-amber-600' },
+                      { name: 'Obsidian Black', gradient: 'from-slate-700 to-slate-900' },
+                      { name: 'Cosmic Violet', gradient: 'from-purple-600 to-pink-600' },
+                    ].map((preset) => (
+                      <button
+                        type="button"
+                        key={preset.name}
+                        onClick={() => setPreviewColor(preset.gradient)}
+                        className={`px-3 py-1.5 rounded-full text-[10px] font-black text-white bg-gradient-to-r ${preset.gradient} transition-transform active:scale-95 border ${
+                          previewColor === preset.gradient ? 'border-orange-500 scale-105 shadow-md ring-1 ring-orange-500' : 'border-transparent opacity-80 hover:opacity-100'
+                        }`}
+                      >
+                        {preset.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl space-y-3 border border-slate-200/60 shadow-inner">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Resource Image</span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 block">Mock Upload</label>
+                      <input 
+                        type="file"
+                        name="image_file" 
+                        accept="image/*"
+                        className="w-full text-[10px] file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:bg-orange-50 file:text-orange-600 hover:file:bg-orange-100 text-slate-500 outline-none" 
+                      />
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 block">External URL</label>
+                      <input 
+                        type="url"
+                        name="image_url" 
+                        value={previewImage}
+                        onChange={(e) => setPreviewImage(e.target.value)}
+                        placeholder="https://... image link"
+                        className="w-full px-2 py-1 border border-slate-200 rounded-lg text-[10px] font-medium text-slate-700 outline-none focus:ring-1 focus:ring-orange-500" 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Priority (0-100)</label>
+                    <input 
+                      name="priority" 
+                      type="number"
+                      defaultValue={editingAd?.priority || 0}
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs text-slate-800 font-bold" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Country ISO Filter</label>
+                    <input 
+                      name="countryCode" 
+                      placeholder="e.g. GH, NG, US"
+                      defaultValue={editingAd?.countryCode}
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs text-slate-800 font-black uppercase placeholder:normal-case" 
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-5">
+                    <input 
+                      type="checkbox" 
+                      name="active" 
+                      id="active"
+                      defaultChecked={editingAd ? editingAd.active : true}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500 border-slate-300" 
+                    />
+                    <label htmlFor="active" className="text-xs font-black text-slate-700 cursor-pointer select-none">Active Run</label>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button 
+                    type="button"
+                    onClick={() => setShowAdModal(false)}
+                    className="px-4 py-2 text-slate-500 font-black hover:bg-slate-50 rounded-xl text-xs active:scale-95 transition-transform"
                   >
-                    <option value="card">Card Ad</option>
-                    <option value="banner">Banner Ad</option>
-                    <option value="popup">Popup Ad</option>
-                    <option value="tall">Tall Ad</option>
-                  </select>
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isUploading}
+                    className="px-6 py-2 bg-orange-600 text-white font-black rounded-xl hover:bg-orange-700 shadow-md enabled:active:scale-95 disabled:opacity-50 text-xs flex items-center gap-1.5 transition-transform"
+                  >
+                    {isUploading ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Compressing...
+                      </>
+                    ) : (
+                      editingAd ? 'Save Modifications' : 'Place Live Campaign'
+                    )}
+                  </button>
                 </div>
-              </div>
+              </form>
 
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">Landing Page URL</label>
-                <input 
-                  name="link" 
-                  defaultValue={editingAd?.link}
-                  required
-                  placeholder="https://..."
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none" 
-                />
-              </div>
-
-              <div className="space-y-4">
-                <label className="text-sm font-bold text-gray-700">Image Upload</label>
-                
-                <div className="space-y-2">
-                  <label className="text-xs text-gray-500">Upload File</label>
-                  <input 
-                    type="file"
-                    name="image_file" 
-                    accept="image/*"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-600 hover:file:bg-orange-100" 
-                  />
+              {/* Right Preview (5 cols) */}
+              <div className="md:col-span-5 p-6 bg-slate-50 border-t md:border-t-0 md:border-l border-slate-100 flex flex-col justify-start items-center">
+                <div className="text-center w-full mb-4">
+                  <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest">Feed corridor Live Preview</span>
+                  <p className="text-[10px] text-slate-500 font-medium">Real-time mock viewport on the portal main hallway</p>
                 </div>
                 
-                <div className="flex items-center gap-4">
-                  <div className="h-px bg-gray-200 flex-1"></div>
-                  <span className="text-xs text-gray-400 font-medium">OR URL</span>
-                  <div className="h-px bg-gray-200 flex-1"></div>
-                </div>
-
-                <div className="space-y-2">
-                  <input 
-                    type="url"
-                    name="image_url" 
-                    defaultValue={editingAd?.image}
-                    placeholder="https://... (Image URL)"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-sm" 
-                  />
+                <div className="w-full max-w-[260px] aspect-[4/5] sm:aspect-[3/4] flex justify-center items-center h-full relative p-2 shadow-inner border border-dashed border-slate-200 rounded-2xl bg-white">
+                  <div className="w-full h-full">
+                    <AdCard
+                      type={previewType}
+                      title={previewTitle || 'Custom Sponsored Campaign'}
+                      description={previewDesc || 'Configure descriptions on the designer sidebar. Perfect targeting drives conversion.'}
+                      cta={previewCta || 'Learn More'}
+                      image={previewImage || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80'}
+                      color={previewColor}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Priority (0-100)</label>
-                  <input 
-                    name="priority" 
-                    type="number"
-                    defaultValue={editingAd?.priority || 0}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none" 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Country Code (Optional)</label>
-                  <input 
-                    name="countryCode" 
-                    placeholder="e.g. GH, NG"
-                    defaultValue={editingAd?.countryCode}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none" 
-                  />
-                </div>
-                <div className="flex items-center gap-2 pt-8">
-                  <input 
-                    type="checkbox" 
-                    name="active" 
-                    id="active"
-                    defaultChecked={editingAd ? editingAd.active : true}
-                    className="w-5 h-5 text-orange-600 rounded focus:ring-orange-500" 
-                  />
-                  <label htmlFor="active" className="text-sm font-bold text-gray-700">Active</label>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-4 pt-4">
-                <button 
-                  type="button"
-                  onClick={() => setShowAdModal(false)}
-                  className="px-6 py-2 text-gray-600 font-bold hover:bg-gray-50 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isUploading}
-                  className="px-8 py-2 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-200 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isUploading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Processing...
-                    </>
-                  ) : (
-                    editingAd ? 'Update Campaign' : 'Launch Campaign'
-                  )}
-                </button>
-              </div>
-            </form>
+            </div>
           </motion.div>
         </div>
       )}

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import ListingCard from '../components/ListingCard';
 import AdCard from '../components/AdCard';
-import { getListings } from '../services/supabaseService';
+import { getListings, getMonetizationAds } from '../services/supabaseService';
 import Icon from '../components/Icon';
 import { useLocation as useAppLocation } from '../context/LocationContext';
 import { useMixedContent } from '../hooks/useMixedContent';
@@ -26,6 +26,20 @@ const SearchPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
   const [page, setPage] = useState(1);
+  const [dbAds, setDbAds] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchDbAds = async () => {
+      try {
+        const activeAds = await getMonetizationAds(userLocation.countryCode);
+        const activeOnly = (activeAds || []).filter((ad: any) => ad.active);
+        setDbAds(activeOnly);
+      } catch (err) {
+        console.warn('Failed to fetch active monetization campaigns:', err);
+      }
+    };
+    fetchDbAds();
+  }, [userLocation.countryCode]);
 
   const [localFilters, setLocalFilters] = useState({
     priceRange: searchParams.get('minPrice') ? (searchParams.get('maxPrice') ? `$${searchParams.get('minPrice')} - $${searchParams.get('maxPrice')}` : '$10,000+') : 'Price Range',
@@ -107,9 +121,23 @@ const SearchPage: React.FC = () => {
 
   // Define country-specific ads
   const ads = useMemo(() => {
+    if (dbAds && dbAds.length > 0) {
+      return dbAds.map((ad: any) => ({
+        id: ad.id,
+        type: ad.type === 'tall' ? 'tall' as const : 'standard' as const,
+        title: ad.title,
+        description: ad.description,
+        cta: ad.cta || 'Learn More',
+        image: ad.image,
+        color: ad.color || 'from-brand-600 to-indigo-600',
+        link: ad.link
+      }));
+    }
+
     const countryName = userLocation.country;
     return [
       {
+        id: 'fallback-1',
         type: 'tall' as const,
         title: `Real Estate in ${countryName}`,
         description: `Explore the best properties across ${countryName}. From luxury villas to affordable apartments.`,
@@ -118,6 +146,7 @@ const SearchPage: React.FC = () => {
         color: 'from-brand-600 to-indigo-600'
       },
       {
+        id: 'fallback-2',
         type: 'tall' as const,
         title: `${userLocation.currency} Mortgage Deals`,
         description: `Get the best mortgage rates in ${userLocation.country} today.`,
@@ -126,7 +155,7 @@ const SearchPage: React.FC = () => {
         color: 'from-emerald-600 to-teal-600'
       }
     ];
-  }, [userLocation]);
+  }, [userLocation, dbAds]);
 
   // Mix listings and ads
   const mixedContent = useMixedContent(listings, ads, 10, 10, false);
@@ -157,6 +186,7 @@ const SearchPage: React.FC = () => {
         
         // Take extra parameters from URL if using Smart Search Input
         if (searchParams.has('location')) initialFilters.location = searchParams.get('location');
+        if (searchParams.has('categoryId')) initialFilters.categoryId = searchParams.get('categoryId');
         if (searchParams.has('propertyType')) initialFilters.propertyType = searchParams.get('propertyType');
         if (searchParams.has('minPrice')) initialFilters.minPrice = searchParams.get('minPrice');
         if (searchParams.has('maxPrice')) initialFilters.maxPrice = searchParams.get('maxPrice');
@@ -183,12 +213,19 @@ const SearchPage: React.FC = () => {
     setIsLoading(true);
     try {
       const nextPage = page + 1;
-      const { listings: nextBatch } = await getListings({
+      const nextFilters: any = {
         page: nextPage,
         limit: ITEMS_PER_BATCH,
         countryCode: userLocation.countryCode,
-        categoryId: query || undefined
-      });
+      };
+      if (searchParams.has('location')) nextFilters.location = searchParams.get('location');
+      if (searchParams.has('categoryId')) nextFilters.categoryId = searchParams.get('categoryId');
+      if (searchParams.has('propertyType')) nextFilters.propertyType = searchParams.get('propertyType');
+      if (searchParams.has('minPrice')) nextFilters.minPrice = searchParams.get('minPrice');
+      if (searchParams.has('maxPrice')) nextFilters.maxPrice = searchParams.get('maxPrice');
+      if (searchParams.has('bedrooms')) nextFilters.bedrooms = searchParams.get('bedrooms');
+
+      const { listings: nextBatch } = await getListings(nextFilters);
       setListings(prev => [...prev, ...nextBatch]);
       setPage(nextPage);
     } catch (error) {
@@ -204,90 +241,43 @@ const SearchPage: React.FC = () => {
     <div className="bg-brand-50 min-h-screen pb-8 pt-4">
       
       <div className="container mx-auto px-4">
-        {/* Search Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            {query ? `Search Results for "${query}"` : searchParams.has('location') ? `Properties in "${searchParams.get('location')}"` : 'All Properties'}
-          </h1>
-          <p className="text-slate-500">Find your perfect home from our verified listings.</p>
+        {/* Category Filter Pills */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6 animate-slide-up w-full">
+          {[
+            { id: 'all', name: 'All Categories', icon: 'globe' },
+            { id: 'houses', name: 'Houses & Apartments', icon: 'home' },
+            { id: 'land', name: 'Lands & Plots', icon: 'mapPin' },
+            { id: 'offices', name: 'Offices & Shops', icon: 'briefcase' },
+            { id: 'warehouses', name: 'Warehouses & Storage', icon: 'package' }
+          ].map(cat => {
+            const isActive = (!searchParams.has('categoryId') && cat.id === 'all') || (searchParams.get('categoryId') === cat.id);
+            return (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  const newSearchParams = new URLSearchParams(searchParams);
+                  if (cat.id === 'all') {
+                    newSearchParams.delete('categoryId');
+                  } else {
+                    newSearchParams.set('categoryId', cat.id);
+                  }
+                  navigate(`${location.pathname}?${newSearchParams.toString()}`);
+                }}
+                className={`flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all duration-200 w-full text-center ${
+                  isActive 
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20 scale-[1.02] ring-2 ring-purple-500/20' 
+                    : 'bg-white text-slate-600 shadow-sm hover:bg-slate-50 border border-slate-200/50 hover:text-slate-900'
+                }`}
+              >
+                <Icon name={cat.icon} size={16} />
+                <span>{cat.name}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Popular Search Trends */}
-        <div className="w-full flex items-center gap-2 overflow-x-auto pb-4 mb-2 scrollbar-none">
-             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 shrink-0">Popular:</span>
-             {['East Legon', 'Cantonments', '2 Bedroom', 'Apartment', 'Under $2k'].map(trend => (
-               <button 
-                 key={trend}
-                 onClick={() => {
-                   const newSearchParams = new URLSearchParams(searchParams);
-                   newSearchParams.set('q', trend);
-                   navigate(`${location.pathname}?${newSearchParams.toString()}`);
-                 }}
-                 className="shrink-0 px-3 py-1.5 bg-brand-100 text-brand-700 rounded-full text-xs font-bold hover:bg-brand-200 transition-colors"
-               >
-                 {trend}
-               </button>
-             ))}
-        </div>
 
-        {/* Real Estate Filters */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm mb-8 flex flex-wrap gap-4 items-center">
-          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
-            <Icon name="bed" size={16} className="text-slate-400" />
-            <select 
-               value={localFilters.bedrooms} 
-               onChange={e => handleFilterChange('bedrooms', e.target.value)}
-               className="bg-transparent text-sm font-medium text-slate-700 outline-none"
-            >
-              <option>Beds</option>
-              <option>1+ Beds</option>
-              <option>2+ Beds</option>
-              <option>3+ Beds</option>
-              <option>4+ Beds</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
-            <Icon name="bath" size={16} className="text-slate-400" />
-            <select 
-              value={localFilters.bathrooms}
-              onChange={e => handleFilterChange('bathrooms', e.target.value)}
-              className="bg-transparent text-sm font-medium text-slate-700 outline-none"
-            >
-              <option>Baths</option>
-              <option>1+ Baths</option>
-              <option>2+ Baths</option>
-              <option>3+ Baths</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
-            <Icon name="home" size={16} className="text-slate-400" />
-            <select 
-               value={localFilters.propertyType}
-               onChange={e => handleFilterChange('propertyType', e.target.value)}
-               className="bg-transparent text-sm font-medium text-slate-700 outline-none"
-            >
-              <option>Property Type</option>
-              <option>Apartment</option>
-              <option>House</option>
-              <option>Condo</option>
-              <option>Villa</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
-            <Icon name="dollarSign" size={16} className="text-slate-400" />
-            <select 
-               value={localFilters.priceRange}
-               onChange={e => handleFilterChange('priceRange', e.target.value)}
-               className="bg-transparent text-sm font-medium text-slate-700 outline-none"
-            >
-              <option>Price Range</option>
-              <option>$0 - $1,000</option>
-              <option>$1,000 - $5,000</option>
-              <option>$5,000 - $10,000</option>
-              <option>$10,000+</option>
-            </select>
-          </div>
-        </div>
+
         
         {/* Listings Section */}
         <div className="flex justify-between items-center mb-4 px-2 pt-2">
@@ -317,12 +307,14 @@ const SearchPage: React.FC = () => {
                 ) : (
                   <AdCard 
                     key={`ad-${idx}`} 
+                    id={item.data.id}
                     type={item.data.type}
                     title={item.data.title}
                     description={item.data.description}
                     cta={item.data.cta}
                     image={item.data.image}
                     color={item.data.color}
+                    link={item.data.link}
                   />
                 )
              ))}

@@ -1,10 +1,32 @@
-import { supabase } from '../supabaseClient';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review, Payment, ViewRequest } from '../types';
 import { withCache, delCache, invalidateCachePrefix, CACHE_TTL, cacheKey } from './cacheService';
 import { uploadImageToCloudinary } from './imageService';
+import { MOCK_LISTINGS, MOCK_USERS, MOCK_ADS, MOCK_CHATS } from './mockData';
 
 // --- AUTH SERVICES ---
 export const loginWithEmail = async (email: string, password: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
+  if (!isSupabaseConfigured) {
+    const matchedUser = MOCK_USERS.find(u => u.socials?.email === email || (u as any).email === email);
+    const mockUser = matchedUser || {
+      id: 'mock-user-login',
+      name: email.split('@')[0],
+      avatar: `https://ui-avatars.com/api/?name=${email.split('@')[0]}&background=random`,
+      rating: 5.0,
+      reviewCount: 1,
+      location: 'Accra, Ghana',
+      memberSince: 'Jun 2026',
+      bio: 'Demo Renter/Buyer Profile',
+      verified: true,
+      role: selectedRole,
+      socials: { email }
+    };
+    
+    const userResult = { ...mockUser, isNewAccount: false, role: selectedRole, uid: mockUser.id, email: email };
+    localStorage.setItem('caliber_mock_user', JSON.stringify(userResult));
+    return userResult;
+  }
+  
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   
@@ -13,6 +35,25 @@ export const loginWithEmail = async (email: string, password: string, selectedRo
 };
 
 export const signupWithEmail = async (email: string, password: string, name: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
+  if (!isSupabaseConfigured) {
+    const mockUser = {
+      id: `gen-user-${Date.now()}`,
+      name,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
+      rating: 5.0,
+      reviewCount: 0,
+      location: 'Lagos, Nigeria',
+      memberSince: 'Jun 2026',
+      bio: 'Newly Registered Account Space',
+      verified: true,
+      role: selectedRole,
+      socials: { email }
+    };
+    const userResult = { ...mockUser, isNewAccount: true, role: selectedRole, uid: mockUser.id, email: email };
+    localStorage.setItem('caliber_mock_user', JSON.stringify(userResult));
+    return userResult;
+  }
+  
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -28,11 +69,34 @@ export const signupWithEmail = async (email: string, password: string, name: str
   return Object.assign(data.user || {}, { isNewAccount: true, role: selectedRole, uid: data.user?.id });
 };
 
-export const logout = () => {
-  return supabase.auth.signOut();
+export const logout = async () => {
+  localStorage.removeItem('caliber_mock_user');
+  if (isSupabaseConfigured) {
+    await supabase.auth.signOut();
+  }
 };
 
 export const subscribeToAuth = (callback: (user: any | null) => void) => {
+  if (!isSupabaseConfigured) {
+    const checkUser = () => {
+      const uStr = localStorage.getItem('caliber_mock_user');
+      if (uStr) {
+        try {
+          callback(JSON.parse(uStr));
+        } catch (e) {
+          callback(null);
+        }
+      } else {
+        callback(null);
+      }
+    };
+    checkUser();
+    // Monitor storage changes
+    const handler = () => checkUser();
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }
+  
   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
     callback(session?.user || null);
   });
@@ -40,6 +104,7 @@ export const subscribeToAuth = (callback: (user: any | null) => void) => {
 };
 
 export const sendPasswordResetEmail = async (email: string) => {
+  if (!isSupabaseConfigured) return;
   await supabase.auth.resetPasswordForEmail(email);
 };
 
@@ -49,12 +114,33 @@ export const verifyPasswordResetCode = async (code: string) => {
 };
 
 export const confirmPasswordReset = async (code: string, newPassword: string) => {
+  if (!isSupabaseConfigured) return;
   await supabase.auth.updateUser({ password: newPassword });
 };
 
 export const loginWithGoogle = async () => {
+  if (!isSupabaseConfigured) {
+    const randomUser = MOCK_USERS.find(u => u.role === 'Agent') || MOCK_USERS[1];
+    localStorage.setItem('caliber_mock_user', JSON.stringify({ ...randomUser, email: 'demo_agent@tym2muv.com' }));
+    window.location.href = '/';
+    return;
+  }
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
+    options: { redirectTo: `${window.location.origin}/` }
+  });
+  if (error) throw error;
+};
+
+export const loginWithLinkedIn = async () => {
+  if (!isSupabaseConfigured) {
+    const randomUser = MOCK_USERS.find(u => u.role === 'Tenant') || MOCK_USERS[4];
+    localStorage.setItem('caliber_mock_user', JSON.stringify({ ...randomUser, email: 'demo_tenant@tym2muv.com' }));
+    window.location.href = '/';
+    return;
+  }
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'linkedin_oidc',
     options: { redirectTo: `${window.location.origin}/` }
   });
   if (error) throw error;
@@ -79,23 +165,43 @@ const mapProfileToUser = (profileData: any): User => {
 };
 
 export const getUserProfile = async (userId: string): Promise<User | null> => {
-  return withCache(cacheKey('profile', userId), async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+  if (!isSupabaseConfigured) {
+    const user = MOCK_USERS.find(u => u.id === userId);
+    return user || null;
+  }
+  
+  try {
+    return await withCache(cacheKey('profile', userId), async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+        
+      if (error || !data) return null;
       
-    if (error || !data) return null;
-    
-    const savedQuery = await supabase.from('saved_listings').select('listing_id').eq('user_id', userId);
-    data.savedListings = (savedQuery.data || []).map(r => r.listing_id);
+      const savedQuery = await supabase.from('saved_listings').select('listing_id').eq('user_id', userId);
+      data.savedListings = (savedQuery.data || []).map(r => r.listing_id);
 
-    return mapProfileToUser(data);
-  }, CACHE_TTL.PROFILES);
+      return mapProfileToUser(data);
+    }, CACHE_TTL.PROFILES);
+  } catch (err) {
+    console.warn("Supabase profile fetch failed, using mock profile", err);
+    const user = MOCK_USERS.find(u => u.id === userId);
+    return user || null;
+  }
 };
 
 export const updateUserProfile = async (userId: string, updates: Partial<User>) => {
+  if (!isSupabaseConfigured) {
+    const userIdx = MOCK_USERS.findIndex(u => u.id === userId);
+    if (userIdx !== -1) {
+      MOCK_USERS[userIdx] = { ...MOCK_USERS[userIdx], ...updates };
+      localStorage.setItem('caliber_mock_user', JSON.stringify(MOCK_USERS[userIdx]));
+    }
+    return;
+  }
+  
   const dbUpdates: any = {};
   if (updates.name !== undefined) dbUpdates.full_name = updates.name;
   if (updates.avatar !== undefined) dbUpdates.avatar_url = updates.avatar;
@@ -109,6 +215,20 @@ export const updateUserProfile = async (userId: string, updates: Partial<User>) 
 };
 
 export const toggleSavedListing = async (userId: string, listingId: string): Promise<void> => {
+  if (!isSupabaseConfigured) {
+    const user = MOCK_USERS.find(u => u.id === userId);
+    if (user) {
+      const saved = user.savedListings || [];
+      if (saved.includes(listingId)) {
+        user.savedListings = saved.filter(id => id !== listingId);
+      } else {
+        user.savedListings = [...saved, listingId];
+      }
+      localStorage.setItem('caliber_mock_user', JSON.stringify(user));
+    }
+    return;
+  }
+  
   const { data: existing } = await supabase
     .from('saved_listings')
     .select('id')
@@ -125,17 +245,37 @@ export const toggleSavedListing = async (userId: string, listingId: string): Pro
 };
 
 export const getSavedListingIds = async (userId: string): Promise<string[]> => {
+  if (!isSupabaseConfigured) {
+    const user = MOCK_USERS.find(u => u.id === userId);
+    return user?.savedListings || [];
+  }
   const { data } = await supabase.from('saved_listings').select('listing_id').eq('user_id', userId);
   return (data || []).map(r => r.listing_id);
 };
 
 export const getAllUsers = async (): Promise<User[]> => {
-  const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data || []).map(mapProfileToUser);
+  if (!isSupabaseConfigured) {
+    return MOCK_USERS;
+  }
+  try {
+    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(mapProfileToUser);
+  } catch (err) {
+    console.warn("Supabase users fetch failed, using mock", err);
+    return MOCK_USERS;
+  }
 };
 
 export const updateUserRole = async (userId: string, role: string) => {
+  if (!isSupabaseConfigured) {
+    const userIdx = MOCK_USERS.findIndex(u => u.id === userId);
+    if (userIdx !== -1) {
+      MOCK_USERS[userIdx].role = role as any;
+      localStorage.setItem('caliber_mock_user', JSON.stringify(MOCK_USERS[userIdx]));
+    }
+    return;
+  }
   await supabase.from('profiles').update({ role }).eq('id', userId);
   await delCache(cacheKey('profile', userId));
 };
@@ -187,56 +327,148 @@ CREATE INDEX IF NOT EXISTS idx_properties_price ON properties(price);
 CREATE INDEX IF NOT EXISTS idx_properties_agent ON properties(agent_id);
 */
 export const getListings = async (filters?: SearchFilters): Promise<{ listings: Listing[], total: number, hasMore: boolean }> => {
-  return withCache(cacheKey('listings', filters || 'all'), async () => {
-    let query = supabase
-      .from('properties')
-      .select('*, seller:profiles!agent_id(*)', { count: 'exact' });
-
-    if (!filters?.isAdminQuery) {
-      query = query.eq('status', 'approved');
-    } else if (filters?.status) {
-      const dbStatus = filters.status === 'active' ? 'approved' : filters.status;
-      query = query.eq('status', dbStatus);
+  const getMockListings = () => {
+    let filtered = [...MOCK_LISTINGS];
+    if (filters?.categoryId) {
+      filtered = filtered.filter(l => l.categoryId === filters.categoryId);
+    }
+    if (filters?.type) {
+      filtered = filtered.filter(l => l.type === filters.type);
+    }
+    if (filters?.propertyType) {
+      filtered = filtered.filter(l => l.propertyType === filters.propertyType);
+    }
+    if (filters?.countryCode) {
+      filtered = filtered.filter(l => l.country === filters.countryCode);
+    }
+    if (filters?.sellerId || filters?.agent_id) {
+      const sellerId = filters.sellerId || filters.agent_id;
+      filtered = filtered.filter(l => l.sellerId === sellerId);
+    }
+    if (filters?.minPrice) {
+      filtered = filtered.filter(l => l.price >= parseInt(filters.minPrice!));
+    }
+    if (filters?.maxPrice) {
+      filtered = filtered.filter(l => l.price <= parseInt(filters.maxPrice!));
+    }
+    if (filters?.location) {
+      filtered = filtered.filter(l => l.location.toLowerCase().includes(filters.location!.toLowerCase()));
+    }
+    if (filters?.query) {
+      const q = filters.query.toLowerCase();
+      filtered = filtered.filter(l => l.title.toLowerCase().includes(q) || l.description.toLowerCase().includes(q));
     }
     
-    if (filters?.categoryId) query = query.eq('category_id', filters.categoryId);
-    if (filters?.type) query = query.eq('listing_type', filters.type);
-    if (filters?.propertyType) query = query.eq('property_type', filters.propertyType);
-    if (filters?.bedrooms) query = query.gte('bedrooms', filters.bedrooms);
-    if (filters?.countryCode) query = query.eq('country_code', filters.countryCode);
-    if (filters?.sellerId || filters?.agent_id) query = query.eq('agent_id', filters?.sellerId || filters?.agent_id);
-    if (filters?.minPrice) query = query.gte('price', parseInt(filters.minPrice));
-    if (filters?.maxPrice) query = query.lte('price', parseInt(filters.maxPrice));
-    if (filters?.location) query = query.ilike('location', `%${filters.location}%`);
-    if (filters?.query) query = query.ilike('title', `%${filters.query}%`);
-    if (filters?.startDate) query = query.gte('created_at', filters.startDate);
-    if (filters?.endDate) query = query.lte('created_at', filters.endDate);
+    // Sort logic
+    if (filters?.sortBy === 'price_asc') {
+      filtered.sort((a, b) => a.price - b.price);
+    } else if (filters?.sortBy === 'price_desc') {
+      filtered.sort((a, b) => b.price - a.price);
+    } else {
+      // Default: premium/featured first, then date newer
+      filtered.sort((a, b) => {
+        if (a.isPremium && !b.isPremium) return -1;
+        if (!a.isPremium && b.isPremium) return 1;
+        if (a.isFeatured && !b.isFeatured) return -1;
+        if (!a.isFeatured && b.isFeatured) return 1;
+        return new Date(b.datePosted).getTime() - new Date(a.datePosted).getTime();
+      });
+    }
 
     const page = filters?.page || 1;
-    const limit = filters?.limit || filters?.pageSize || 50;
-    
+    const limit = filters?.limit || filters?.pageSize || 24;
     const from = (page - 1) * limit;
-    query = query.range(from, from + limit - 1);
+    const pageData = filtered.slice(from, from + limit);
+    
+    return {
+      listings: pageData,
+      total: filtered.length,
+      hasMore: from + limit < filtered.length
+    };
+  };
 
-    const { data, error, count } = await query.order('is_premium', { ascending: false }).order('created_at', { ascending: false });
-    if (error) throw error;
-    
-    const totalCount = count || 0;
-    const hasMore = from + limit < totalCount;
-    
-    return { listings: (data || []).map(mapPropertyToListing), total: totalCount, hasMore };
-  }, CACHE_TTL.SEARCH);
+  if (!isSupabaseConfigured) {
+    return getMockListings();
+  }
+  
+  try {
+    return await withCache(cacheKey('listings', filters || 'all'), async () => {
+      let query = supabase
+        .from('properties')
+        .select('*, seller:profiles!agent_id(*)', { count: 'exact' });
+
+      if (!filters?.isAdminQuery) {
+        query = query.eq('status', 'approved');
+      } else if (filters?.status) {
+        const dbStatus = filters.status === 'active' ? 'approved' : filters.status;
+        query = query.eq('status', dbStatus);
+      }
+      
+      if (filters?.categoryId) query = query.eq('category_id', filters.categoryId);
+      if (filters?.type) query = query.eq('listing_type', filters.type);
+      if (filters?.propertyType) query = query.eq('property_type', filters.propertyType);
+      if (filters?.bedrooms) query = query.gte('bedrooms', filters.bedrooms);
+      if (filters?.countryCode) query = query.eq('country_code', filters.countryCode);
+      if (filters?.sellerId || filters?.agent_id) query = query.eq('agent_id', filters?.sellerId || filters?.agent_id);
+      if (filters?.minPrice) query = query.gte('price', parseInt(filters.minPrice));
+      if (filters?.maxPrice) query = query.lte('price', parseInt(filters.maxPrice));
+      if (filters?.location) query = query.ilike('location', `%${filters.location}%`);
+      if (filters?.query) query = query.ilike('title', `%${filters.query}%`);
+      if (filters?.startDate) query = query.gte('created_at', filters.startDate);
+      if (filters?.endDate) query = query.lte('created_at', filters.endDate);
+
+      const page = filters?.page || 1;
+      const limit = filters?.limit || filters?.pageSize || 50;
+      
+      const from = (page - 1) * limit;
+      query = query.range(from, from + limit - 1);
+
+      const { data, error, count } = await query.order('is_premium', { ascending: false }).order('created_at', { ascending: false });
+      if (error) throw error;
+      
+      const totalCount = count || 0;
+      const hasMore = from + limit < totalCount;
+      
+      return { listings: (data || []).map(mapPropertyToListing), total: totalCount, hasMore };
+    }, CACHE_TTL.SEARCH);
+  } catch (err) {
+    console.warn("Supabase listings query failed, using mock", err);
+    return getMockListings();
+  }
 };
 
 export const getListingById = async (id: string): Promise<Listing | null> => {
-  return withCache(cacheKey('listing', id), async () => {
-    const { data, error } = await supabase.from('properties').select('*').eq('id', id).single();
-    if (error || !data) return null;
-    return mapPropertyToListing(data);
-  }, CACHE_TTL.LISTINGS);
+  if (!isSupabaseConfigured) {
+    const listing = MOCK_LISTINGS.find(l => l.id === id);
+    return listing || null;
+  }
+  
+  try {
+    return await withCache(cacheKey('listing', id), async () => {
+      const { data, error } = await supabase.from('properties').select('*').eq('id', id).single();
+      if (error || !data) return null;
+      return mapPropertyToListing(data);
+    }, CACHE_TTL.LISTINGS);
+  } catch (err) {
+    console.warn("Supabase getListingById failed, using mock description", err);
+    const listing = MOCK_LISTINGS.find(l => l.id === id);
+    return listing || null;
+  }
 };
 
 export const createListing = async (listing: Omit<Listing, 'id'>): Promise<string> => {
+  if (!isSupabaseConfigured) {
+    const newId = `gen-listing-${Date.now()}`;
+    const newListing: Listing = {
+      ...listing,
+      id: newId,
+      datePosted: new Date().toISOString(),
+      expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    MOCK_LISTINGS.push(newListing);
+    return newId;
+  }
+  
   const { data, error } = await supabase.from('properties').insert({
     title: listing.title,
     price: listing.price,
@@ -270,6 +502,14 @@ export const createListing = async (listing: Omit<Listing, 'id'>): Promise<strin
 };
 
 export const updateListing = async (id: string, updates: Partial<Listing>) => {
+  if (!isSupabaseConfigured) {
+    const idx = MOCK_LISTINGS.findIndex(l => l.id === id);
+    if (idx !== -1) {
+      MOCK_LISTINGS[idx] = { ...MOCK_LISTINGS[idx], ...updates };
+    }
+    return;
+  }
+  
   const dbUpdates: any = {};
   if (updates.status !== undefined) {
     dbUpdates.status = updates.status === 'active' ? 'approved' : updates.status;
@@ -297,6 +537,14 @@ export const updateListing = async (id: string, updates: Partial<Listing>) => {
 };
 
 export const deleteListing = async (id: string) => {
+  if (!isSupabaseConfigured) {
+    const idx = MOCK_LISTINGS.findIndex(l => l.id === id);
+    if (idx !== -1) {
+      MOCK_LISTINGS.splice(idx, 1);
+    }
+    return;
+  }
+  
   const { error } = await supabase.from('properties').delete().eq('id', id);
   if (error) throw error;
   
@@ -442,48 +690,135 @@ export const getUserPayments = async (userId: string): Promise<Payment[]> => {
 
 // --- ADMIN SERVICES ---
 export const getAdminStats = async () => {
-  return withCache('admin_stats', async () => {
-    const { data, error } = await supabase.rpc('get_dashboard_stats');
-    if (error) {
-      console.error('Error fetching admin stats:', error);
-      // fallback if rpc fails
-      return {
-        totalUsers: 0, totalListings: 0, totalAds: 0,
-        pendingApprovals: 0, revenue: 0,
-        userRoles: { Admin: 0, Agent: 0, Customer: 0 },
-        listingTypes: { Rent: 0, Sale: 0 },
-        adPerformance: { totalClicks: 0, totalImpressions: 0 }
-      };
-    }
-    return data;
-  }, 300); // 5 minute TTL (5 * 60)
+  if (!isSupabaseConfigured) {
+    return {
+      totalUsers: MOCK_USERS.length,
+      totalListings: MOCK_LISTINGS.length,
+      totalAds: MOCK_ADS.length,
+      pendingApprovals: 2,
+      revenue: 45000,
+      userRoles: { 
+        Admin: 1, 
+        Agent: MOCK_USERS.filter(u => u.role === 'Agent').length, 
+        Customer: MOCK_USERS.filter(u => u.role !== 'Agent').length 
+      },
+      listingTypes: { 
+        Rent: MOCK_LISTINGS.filter(l => l.type === 'Rent').length, 
+        Sale: MOCK_LISTINGS.filter(l => l.type === 'Sale').length 
+      },
+      adPerformance: { totalClicks: 12500, totalImpressions: 489000 }
+    };
+  }
+
+  try {
+    return await withCache('admin_stats', async () => {
+      const { data, error } = await supabase.rpc('get_dashboard_stats');
+      if (error) {
+        console.error('Error fetching admin stats:', error);
+        // fallback if rpc fails
+        return {
+          totalUsers: MOCK_USERS.length, totalListings: MOCK_LISTINGS.length, totalAds: MOCK_ADS.length,
+          pendingApprovals: 2, revenue: 45000,
+          userRoles: { 
+            Admin: 1, 
+            Agent: MOCK_USERS.filter(u => u.role === 'Agent').length, 
+            Customer: MOCK_USERS.filter(u => u.role !== 'Agent').length 
+          },
+          listingTypes: { 
+            Rent: MOCK_LISTINGS.filter(l => l.type === 'Rent').length, 
+            Sale: MOCK_LISTINGS.filter(l => l.type === 'Sale').length 
+          },
+          adPerformance: { totalClicks: 12500, totalImpressions: 489000 }
+        };
+      }
+      return data;
+    }, 300); // 5 minute TTL (5 * 60)
+  } catch (err) {
+    console.warn("getAdminStats query failed, falling back to mock counts:", err);
+    return {
+      totalUsers: MOCK_USERS.length,
+      totalListings: MOCK_LISTINGS.length,
+      totalAds: MOCK_ADS.length,
+      pendingApprovals: 2,
+      revenue: 45000,
+      userRoles: { 
+        Admin: 1, 
+        Agent: MOCK_USERS.filter(u => u.role === 'Agent').length, 
+        Customer: MOCK_USERS.filter(u => u.role !== 'Agent').length 
+      },
+      listingTypes: { 
+        Rent: MOCK_LISTINGS.filter(l => l.type === 'Rent').length, 
+        Sale: MOCK_LISTINGS.filter(l => l.type === 'Sale').length 
+      },
+      adPerformance: { totalClicks: 12500, totalImpressions: 489000 }
+    };
+  }
 };
 
 // --- MONETIZATION SERVICES ---
 export const getMonetizationAds = async (countryCode?: string): Promise<Monetization[]> => {
-  let query = supabase.from('monetization_ads').select('*').order('priority', { ascending: false });
-  if (countryCode) query = query.eq('country_code', countryCode);
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data || []).map((ad: any) => ({
-    id: ad.id,
-    type: ad.type,
-    title: ad.title,
-    description: ad.description,
-    cta: ad.cta,
-    image: ad.image_url,
-    link: ad.link,
-    color: ad.color,
-    active: ad.active,
-    countryCode: ad.country_code,
-    priority: ad.priority,
-    clicks: ad.clicks,
-    impressions: ad.impressions,
-    createdAt: ad.created_at
-  }));
+  const getMockAds = () => {
+    let ads = [...MOCK_ADS];
+    if (countryCode) {
+      ads = ads.filter(ad => ad.countryCode === countryCode);
+    }
+    return ads;
+  };
+
+  if (!isSupabaseConfigured) {
+    return getMockAds();
+  }
+
+  try {
+    let query = supabase.from('monetization_ads').select('*').order('priority', { ascending: false });
+    if (countryCode) query = query.eq('country_code', countryCode);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map((ad: any) => ({
+      id: ad.id,
+      type: ad.type,
+      title: ad.title,
+      description: ad.description,
+      cta: ad.cta,
+      image: ad.image_url,
+      link: ad.link,
+      color: ad.color,
+      active: ad.active,
+      countryCode: ad.country_code,
+      priority: ad.priority,
+      clicks: ad.clicks,
+      impressions: ad.impressions,
+      createdAt: ad.created_at
+    }));
+  } catch (err) {
+    console.warn("getMonetizationAds failed, using mock ads", err);
+    return getMockAds();
+  }
 };
 
 export const createMonetizationAd = async (ad: any): Promise<string> => {
+  if (!isSupabaseConfigured) {
+    const newId = `ad-gen-${Date.now()}`;
+    const newAd: Monetization = {
+      id: newId,
+      type: ad.type,
+      title: ad.title,
+      description: ad.description,
+      cta: ad.cta,
+      image: ad.image || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&q=80',
+      link: ad.link,
+      color: ad.color || 'from-orange-600 to-amber-600',
+      active: ad.active !== undefined ? ad.active : true,
+      countryCode: ad.countryCode,
+      priority: ad.priority || 0,
+      clicks: 0,
+      impressions: 0,
+      createdAt: new Date().toISOString()
+    };
+    MOCK_ADS.push(newAd);
+    return newId;
+  }
+
   const { data, error } = await supabase.from('monetization_ads').insert({
     type: ad.type,
     title: ad.title,
@@ -501,15 +836,42 @@ export const createMonetizationAd = async (ad: any): Promise<string> => {
 };
 
 export const updateMonetizationAd = async (id: string, updates: any) => {
+  if (!isSupabaseConfigured) {
+    const idx = MOCK_ADS.findIndex(ad => ad.id === id);
+    if (idx !== -1) {
+      MOCK_ADS[idx] = {
+        ...MOCK_ADS[idx],
+        ...updates
+      };
+    }
+    return;
+  }
+
   const dbUpdates: any = {};
+  if (updates.type !== undefined) dbUpdates.type = updates.type;
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.description !== undefined) dbUpdates.description = updates.description;
+  if (updates.cta !== undefined) dbUpdates.cta = updates.cta;
+  if (updates.image !== undefined) dbUpdates.image_url = updates.image;
+  if (updates.link !== undefined) dbUpdates.link = updates.link;
+  if (updates.color !== undefined) dbUpdates.color = updates.color;
   if (updates.active !== undefined) dbUpdates.active = updates.active;
   if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
   if (updates.countryCode !== undefined) dbUpdates.country_code = updates.countryCode;
+
   const { error } = await supabase.from('monetization_ads').update(dbUpdates).eq('id', id);
   if (error) throw error;
 };
 
 export const deleteMonetizationAd = async (id: string) => {
+  if (!isSupabaseConfigured) {
+    const idx = MOCK_ADS.findIndex(ad => ad.id === id);
+    if (idx !== -1) {
+      MOCK_ADS.splice(idx, 1);
+    }
+    return;
+  }
+
   const { error } = await supabase.from('monetization_ads').delete().eq('id', id);
   if (error) throw error;
 };

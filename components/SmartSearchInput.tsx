@@ -38,9 +38,14 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = ({
   });
 
   const debouncedQuery = useDebounce(query, 500);
+  const isFirstMount = React.useRef(true);
 
   // Trigger search when debounced query changes
   useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
     // Only trigger if we aren't showing filters. If showing filters, user will click "Apply Filters"
     if (onSearch && !showFilters) {
       onSearch(debouncedQuery, filters);
@@ -243,16 +248,47 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = ({
                 </div>
               </div>
 
-              {/* Location & Property Type Row */}
+              {/* Category & Location Row */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Category</label>
+                    <div className="relative">
+                        <select 
+                        value={filters.categoryId || ''} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFilters(prev => ({ 
+                            ...prev, 
+                            categoryId: val,
+                            // Autofill propertyType sensibly
+                            propertyType: val === 'houses' ? 'Apartment' : val === 'land' ? 'Land' : val === 'offices' ? 'Office' : val === 'warehouses' ? 'Warehouse' : undefined
+                          }));
+                        }}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-xs outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 appearance-none font-medium"
+                        >
+                        <option value="">Any Category</option>
+                        <option value="houses">Houses & Apartments</option>
+                        <option value="land">Lands & Plots</option>
+                        <option value="offices">Offices & Shops</option>
+                        <option value="warehouses">Warehouses & Storage</option>
+                        </select>
+                         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <Icon name="chevronRight" size={12} className="rotate-90" />
+                        </div>
+                    </div>
+                 </div>
                  <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Location</label>
                     <LocationSelect 
                         value={filters.location || ''}
                         onChange={(val) => handleFilterChange('location', val)}
                         placeholder="Region, City..."
-                    />
+                     />
                  </div>
+              </div>
+
+              {/* Property Type & Beds Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Property Type</label>
                     <div className="relative">
@@ -268,16 +304,16 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = ({
                         <option value="Villa">Villa</option>
                         <option value="Office">Office</option>
                         <option value="Land">Land</option>
+                        <option value="Warehouse">Warehouse</option>
+                        <option value="Storage">Storage</option>
+                        <option value="Commercial">Commercial</option>
+                        <option value="Retail">Retail</option>
                         </select>
                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                             <Icon name="chevronRight" size={12} className="rotate-90" />
                         </div>
                     </div>
                  </div>
-              </div>
-
-              {/* Beds & Baths Row */}
-              <div className="grid grid-cols-2 gap-4">
                  <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Beds</label>
                     <div className="relative">
@@ -292,25 +328,6 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = ({
                         <option value="3">3+</option>
                         <option value="4">4+</option>
                         <option value="5">5+</option>
-                        </select>
-                         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                            <Icon name="chevronRight" size={12} className="rotate-90" />
-                        </div>
-                    </div>
-                 </div>
-                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Baths</label>
-                    <div className="relative">
-                        <select 
-                        value={filters.bathrooms || ''} 
-                        onChange={(e) => handleFilterChange('bathrooms', e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-xs outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 appearance-none font-medium"
-                        >
-                        <option value="">Any</option>
-                        <option value="1">1+</option>
-                        <option value="2">2+</option>
-                        <option value="3">3+</option>
-                        <option value="4">4+</option>
                         </select>
                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                             <Icon name="chevronRight" size={12} className="rotate-90" />

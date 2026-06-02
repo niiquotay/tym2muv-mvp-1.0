@@ -78,7 +78,9 @@ const ResetPassword = () => {
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-fuchsia-200 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
 
         <div className="relative z-10 flex flex-col items-center text-center">
-          <Logo className="mb-6 scale-110" />
+          <Link to="/">
+            <Logo className="mb-6 scale-110" />
+          </Link>
           
           <h2 className="text-3xl font-bold text-slate-800 mb-2 font-display">
             Set New Password

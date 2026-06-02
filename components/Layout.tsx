@@ -182,7 +182,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     {/* Post Button */}
                     <Link 
                       to={isAuthenticated && (user?.role !== 'Agent' && user?.role !== 'Admin') ? "/create-vendor" : "/post"} 
-                      className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white px-2.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold text-sm transition-all shadow-lg shadow-brand-500/30 active:scale-95"
+                      className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold text-sm transition-all shadow-lg shadow-red-500/30 active:scale-95"
                     >
                       <Icon name="plus" size={16} strokeWidth={3} className="sm:w-[18px] sm:h-[18px]" />
                       <span className="hidden sm:inline">Post</span>
@@ -190,7 +190,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
                     {/* Auth */}
                     {isAuthenticated ? (
-                    <div className="flex items-center gap-1 sm:gap-2">
+                    <>
                         {/* Admin Link */}
                         {(user?.role === 'Admin' || user?.socials?.email === 'info@caliberdesk.com') && (
                           <Link to="/admin" className="p-1.5 sm:p-2 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-full transition-all group" title="Admin Panel">
@@ -210,23 +210,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         <Link to="/profile/me" className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-100 p-0.5 border border-slate-200 cursor-pointer hover:ring-2 hover:ring-brand-200 transition-all">
                         <img src={user?.avatar || 'https://via.placeholder.com/150'} alt="User" referrerPolicy="no-referrer" className="w-full h-full rounded-full object-cover" />
                         </Link>
-                    </div>
+                    </>
                     ) : (
-                    <div className="flex items-center gap-2">
+                    <>
                       <Link 
                           to="/signin" 
-                          className="flex items-center gap-1 font-bold text-sm text-slate-600 hover:text-slate-900 px-1 sm:px-2 transition-colors"
+                          className="flex items-center gap-2 font-bold text-sm bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-purple-500/10 active:scale-98"
                       >
-                          <Icon name="user" size={18} className="sm:hidden" />
-                          <span className="hidden sm:inline">Sign In</span>
+                          <Icon name="user" size={16} />
+                          <span>Sign In / Join</span>
                       </Link>
-                      <Link 
-                          to="/signup" 
-                          className="hidden sm:flex items-center gap-1 font-bold text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-200/50"
-                      >
-                          <span>Sign Up</span>
-                      </Link>
-                    </div>
+                    </>
                     )}
                 </div>
             </div>
@@ -252,9 +246,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           
           {/* Brand Only (Copyright Removed) */}
           <div className="flex flex-col md:flex-row items-center gap-2 md:gap-8">
-            <div className="scale-90 opacity-90 grayscale brightness-200">
+            <Link to="/" className="scale-90 opacity-90 grayscale brightness-200 hover:opacity-100 transition-all duration-300">
                 <Logo />
-            </div>
+            </Link>
           </div>
 
           {/* Contact & Socials */}

@@ -1,29 +1,41 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Icon from './Icon';
+import { trackAdClick, trackAdImpression } from '../services/supabaseService';
 
 interface AdCardProps {
-  type: 'standard' | 'tall';
+  id?: string;
+  type: 'standard' | 'tall' | 'card' | 'banner' | 'popup';
   title: string;
   description: string;
   cta: string;
   image: string;
   color?: string;
+  link?: string;
 }
 
-const AdCard: React.FC<AdCardProps> = ({ type, title, description, cta, image, color = 'from-brand-600 to-fuchsia-600' }) => {
+const AdCard: React.FC<AdCardProps> = ({ id, type, title, description, cta, image, color = 'from-brand-600 to-fuchsia-600', link }) => {
   const isTall = type === 'tall';
 
-  return (
-    <motion.div
-      whileHover={{ y: -5 }}
-      className={`relative overflow-hidden rounded-2xl flex flex-col ${isTall ? 'row-span-2 h-full' : 'min-h-[160px] sm:h-full'} group shadow-sm border border-slate-100`}
-    >
+  useEffect(() => {
+    if (id) {
+      trackAdImpression(id).catch((err) => console.warn('Impression log failed', err));
+    }
+  }, [id]);
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (id) {
+      trackAdClick(id).catch((err) => console.warn('Click log failed', err));
+    }
+  };
+
+  const CardBody = (
+    <>
       {/* Background Image with Overlay */}
       <div className={`absolute inset-0 z-0`}>
         <img 
-          src={image} 
+          src={image || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 1 1\'%3E%3C/svg%3E'} 
           alt={title} 
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           referrerPolicy="no-referrer"
@@ -34,7 +46,7 @@ const AdCard: React.FC<AdCardProps> = ({ type, title, description, cta, image, c
 
       {/* Content */}
       <div className="relative z-10 p-3 sm:p-4 mt-auto flex flex-col h-full justify-end">
-        <div className="mb-1 sm:mb-2">
+        <div className="mb-1 sm:mb-2 flex justify-between items-center w-full">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[9px] sm:text-[10px] font-bold text-white uppercase tracking-wider border border-white/30">
             <Icon name="star" size={10} className="fill-white" />
             Sponsored
@@ -49,18 +61,43 @@ const AdCard: React.FC<AdCardProps> = ({ type, title, description, cta, image, c
           {description}
         </p>
         
-        <button className="w-full py-1.5 sm:py-2 bg-white text-slate-900 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm hover:bg-brand-50 transition-colors flex items-center justify-center gap-2 group/btn">
+        <span className="w-full py-1.5 sm:py-2 bg-white text-slate-900 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm hover:bg-brand-50 transition-colors flex items-center justify-center gap-2 group/btn">
           {cta}
           <Icon name="chevronRight" size={14} className="sm:w-4 sm:h-4 transition-transform group-hover/btn:translate-x-1" />
-        </button>
+        </span>
       </div>
 
       {/* Decorative Elements */}
-      <div className="absolute top-2 right-2 z-10">
-        <div className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
-          <Icon name="info" size={14} className="text-white/60" />
-        </div>
+      <div className="absolute top-2 right-2 z-10 font-sans text-[9px] font-semibold text-white/50 pointer-events-none">
+        AD
       </div>
+    </>
+  );
+
+  const containerClasses = `relative overflow-hidden rounded-2xl flex flex-col ${isTall ? 'row-span-2 h-full' : 'min-h-[160px] sm:h-full'} group shadow-sm border border-slate-100 cursor-pointer block w-full text-left`;
+
+  if (link) {
+    return (
+      <motion.a
+        href={link}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={handleClick}
+        whileHover={{ y: -5 }}
+        className={containerClasses}
+      >
+        {CardBody}
+      </motion.a>
+    );
+  }
+
+  return (
+    <motion.div
+      onClick={handleClick}
+      whileHover={{ y: -5 }}
+      className={containerClasses}
+    >
+      {CardBody}
     </motion.div>
   );
 };

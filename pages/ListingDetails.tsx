@@ -474,7 +474,7 @@ const ListingDetails: React.FC = () => {
             </div>
 
             <div className="mt-6">
-              <MortgageCalculator price={listing.price} />
+              <MortgageCalculator price={listing.price} currency={listing.currency} />
             </div>
           </div>
 

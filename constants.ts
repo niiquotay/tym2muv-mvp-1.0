@@ -4,43 +4,51 @@ export const APP_NAME = "tym2muv Real Estate";
 
 export const CATEGORIES: Category[] = [
   {
-    id: 'residential-rent',
-    name: 'Residential for Rent',
-    description: 'Find your next home with our extensive list of apartments, houses, and condos for rent.',
+    id: 'houses',
+    name: 'Houses',
+    description: 'Find beautiful apartments, houses, condos, and villas for rent or sale.',
     iconName: 'home',
     color: 'bg-blue-100 text-blue-600',
     subcategories: [
-      { id: 'apartments-rent', name: 'Apartments' },
-      { id: 'houses-rent', name: 'Houses' },
-      { id: 'condos-rent', name: 'Condos & Townhouses' },
-      { id: 'roommates', name: 'Roommates & Shared' },
-      { id: 'short-stay', name: 'Short Stay / Airbnb' },
+      { id: 'apartments', name: 'Apartments' },
+      { id: 'houses-res', name: 'Houses & Villas' },
+      { id: 'condos', name: 'Condos & Townhouses' },
     ]
   },
   {
-    id: 'residential-sale',
-    name: 'Residential for Sale',
-    description: 'Invest in your future. Browse houses, apartments, and land for sale.',
-    iconName: 'building',
+    id: 'land',
+    name: 'Land',
+    description: 'Browse residential, agricultural, and commercial land or plots.',
+    iconName: 'mapPin',
     color: 'bg-emerald-100 text-emerald-600',
     subcategories: [
-      { id: 'apartments-sale', name: 'Apartments' },
-      { id: 'houses-sale', name: 'Houses' },
-      { id: 'condos-sale', name: 'Condos & Townhouses' },
-      { id: 'land-sale', name: 'Land & Plots' },
+      { id: 'residential-plots', name: 'Residential Plots' },
+      { id: 'agricultural-plots', name: 'Agricultural Plots' },
+      { id: 'commercial-plots', name: 'Commercial Land' },
     ]
   },
   {
-    id: 'commercial',
-    name: 'Commercial',
-    description: 'Grow your business with the right space. Offices, retail, and warehouses.',
+    id: 'offices',
+    name: 'Offices',
+    description: 'Corporate headquarters, commercial offices, co-working, and retail spaces.',
     iconName: 'briefcase',
     color: 'bg-amber-100 text-amber-600',
     subcategories: [
-      { id: 'offices', name: 'Offices' },
-      { id: 'retail', name: 'Retail Spaces' },
-      { id: 'warehouses', name: 'Warehouses & Industrial' },
-      { id: 'commercial-land', name: 'Commercial Land' },
+      { id: 'private-offices', name: 'Private Offices' },
+      { id: 'coworking', name: 'Co-working' },
+      { id: 'retail-shops', name: 'Retail Shops' },
+    ]
+  },
+  {
+    id: 'warehouses',
+    name: 'Warehouses & Storage',
+    description: 'Find storage spaces, industrial warehouses, cold rooms, and fulfillment centers.',
+    iconName: 'package',
+    color: 'bg-indigo-100 text-indigo-600',
+    subcategories: [
+      { id: 'storage', name: 'Storage Units' },
+      { id: 'warehouses-ind', name: 'Industrial Warehouses' },
+      { id: 'cold-storage', name: 'Cold Rooms' },
     ]
   },
   {

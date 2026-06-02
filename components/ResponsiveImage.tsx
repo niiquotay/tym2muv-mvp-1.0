@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { getOptimizedImageUrl } from '../utils/imageOptimization';
 
 interface ResponsiveImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
-  src: string;
+  src?: string | null;
   fallbackSrc?: string;
   generateSrcSet?: boolean;
 }
@@ -47,16 +47,18 @@ const ResponsiveImage: React.FC<ResponsiveImageProps> = ({
     };
   }, []);
 
-  const optimizedSrc = isVisible ? getOptimizedImageUrl(src, { width: 800 }) : '';
-  const srcSet = (isVisible && generateSrcSet) 
+  const fallbackUri = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 2'%3E%3C/svg%3E";
+  const targetSrc = src || fallbackSrc || fallbackUri;
+  const optimizedSrc = isVisible ? (getOptimizedImageUrl(targetSrc, { width: 800 }) || targetSrc) : fallbackUri;
+  const srcSet = (isVisible && generateSrcSet && src) 
     ? `${getOptimizedImageUrl(src, { width: 400 })} 400w, ${getOptimizedImageUrl(src, { width: 800 })} 800w, ${getOptimizedImageUrl(src, { width: 1200 })} 1200w` 
     : undefined;
 
   return (
     <img
       ref={imgRef}
-      src={isVisible ? optimizedSrc : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 2'%3E%3C/svg%3E"}
-      srcSet={srcSet}
+      src={optimizedSrc}
+      srcSet={srcSet || undefined}
       className={`${className} ${!isVisible ? 'bg-slate-200 animate-pulse' : ''}`}
       onError={(e) => {
         if (fallbackSrc) {

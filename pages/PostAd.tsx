@@ -110,7 +110,22 @@ const PostAd: React.FC = () => {
   }, [formData.bedrooms, formData.propertyType, formData.location]);
 
   const handleCategorySelect = (id: string, name: string) => {
-    setFormData(prev => ({ ...prev, categoryId: id, categoryName: name }));
+    let defaultPropType = 'Apartment';
+    if (id === 'land') {
+      defaultPropType = 'Land';
+    } else if (id === 'offices') {
+      defaultPropType = 'Office';
+    } else if (id === 'houses') {
+      defaultPropType = 'House';
+    } else if (id === 'warehouses') {
+      defaultPropType = 'Warehouse';
+    }
+    setFormData(prev => ({ 
+      ...prev, 
+      categoryId: id, 
+      categoryName: name,
+      propertyType: defaultPropType
+    }));
     setStep(2);
   };
 
@@ -392,12 +407,46 @@ const PostAd: React.FC = () => {
                       onChange={handleChange}
                       className="w-full border border-slate-300 rounded-xl p-4 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all shadow-sm bg-white/60"
                     >
-                       <option>Apartment</option>
-                       <option>House</option>
-                       <option>Condo</option>
-                       <option>Villa</option>
-                       <option>Office</option>
-                       <option>Land</option>
+                      {formData.categoryId === 'houses' && (
+                        <>
+                          <option value="Apartment">Apartment</option>
+                          <option value="House">House</option>
+                          <option value="Condo">Condo</option>
+                          <option value="Villa">Villa</option>
+                        </>
+                      )}
+                      {formData.categoryId === 'land' && (
+                        <>
+                          <option value="Land">Land</option>
+                        </>
+                      )}
+                      {formData.categoryId === 'warehouses' && (
+                        <>
+                          <option value="Warehouse">Warehouse</option>
+                          <option value="Storage">Storage</option>
+                        </>
+                      )}
+                      {formData.categoryId === 'offices' && (
+                        <>
+                          <option value="Office">Office</option>
+                          <option value="Commercial">Commercial</option>
+                          <option value="Retail">Retail</option>
+                          <option value="Warehouse">Warehouse</option>
+                        </>
+                      )}
+                      {!['houses', 'land', 'offices', 'warehouses'].includes(formData.categoryId) && (
+                        <>
+                          <option value="Apartment">Apartment</option>
+                          <option value="House">House</option>
+                          <option value="Condo">Condo</option>
+                          <option value="Villa">Villa</option>
+                          <option value="Office">Office</option>
+                          <option value="Land">Land</option>
+                          <option value="Commercial">Commercial</option>
+                          <option value="Retail">Retail</option>
+                          <option value="Warehouse">Warehouse</option>
+                        </>
+                      )}
                     </select>
                   </div>
                </div>
