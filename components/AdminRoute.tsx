@@ -18,7 +18,18 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
         return;
       }
       
-      if (!isSupabaseConfigured) {
+      const localMockUserStr = localStorage.getItem('caliber_mock_user');
+      let isMockAdmin = false;
+      if (localMockUserStr) {
+        try {
+          const parsed = JSON.parse(localMockUserStr);
+          if (parsed && parsed.role === 'Admin') {
+            isMockAdmin = true;
+          }
+        } catch (_) {}
+      }
+
+      if (isMockAdmin || !isSupabaseConfigured) {
         setIsAdmin(user.role === 'Admin');
         return;
       }
