@@ -21,6 +21,7 @@ const Chat = lazy(() => import('./pages/Chat'));
 const SavedListings = lazy(() => import('./pages/SavedListings'));
 const Settings = lazy(() => import('./pages/Settings'));
 const SignIn = lazy(() => import('./pages/SignIn'));
+const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
@@ -151,6 +152,7 @@ const App: React.FC = () => {
                   <Route path="/" element={<Home />} />
                   <Route path="/signin" element={<SignIn defaultTab="signin" />} />
                   <Route path="/signup" element={<SignIn defaultTab="signup" />} />
+                  <Route path="/admin-login" element={<AdminLogin />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
                   <Route path="/search" element={<SearchPage />} />
                   <Route path="/listing/:id" element={<ListingDetails />} /> 

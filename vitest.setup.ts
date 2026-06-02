@@ -58,5 +58,6 @@ if (typeof window !== 'undefined') {
 import { mockSupabase } from './__tests__/mocks/supabase';
 
 vi.mock('./supabaseClient', () => ({
-  supabase: mockSupabase
+  supabase: mockSupabase,
+  isSupabaseConfigured: true
 }));

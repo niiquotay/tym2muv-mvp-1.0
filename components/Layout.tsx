@@ -140,7 +140,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate(`/search?${searchParams.toString()}`);
   };
 
-  const isAuthPage = location.pathname === '/signin' || location.pathname === '/signup';
+  const isAuthPage = location.pathname === '/signin' || location.pathname === '/signup' || location.pathname === '/admin-login';
 
   if (isAuthPage) {
     return (

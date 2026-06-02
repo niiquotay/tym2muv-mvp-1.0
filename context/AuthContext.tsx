@@ -35,12 +35,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setSupabaseUser(session.user);
-        const profile = await getUserProfile(session.user.id);
-        setUser({ ...profile, email: session.user.email } as any); // Include email
-      } else {
+      const mockStr = localStorage.getItem('caliber_mock_user');
+      if (mockStr) {
+        try {
+          const mockUser = JSON.parse(mockStr);
+          setUser(mockUser);
+          setSupabaseUser(null);
+          setLoading(false);
+          setIsAuthReady(true);
+          return;
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setSupabaseUser(session.user);
+          const profile = await getUserProfile(session.user.id);
+          setUser({ ...profile, email: session.user.email } as any); // Include email
+        } else {
+          setSupabaseUser(null);
+          setUser(null);
+        }
+      } catch (err) {
+        console.warn('Failed to retrieve Supabase session:', err);
         setSupabaseUser(null);
         setUser(null);
       }
@@ -51,9 +71,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
 
     const unsubscribe = subscribeToAuth(async (sUser) => {
+      const mockStr = localStorage.getItem('caliber_mock_user');
+      if (mockStr) {
+        try {
+          const mockUser = JSON.parse(mockStr);
+          setUser(mockUser);
+          setSupabaseUser(null);
+          setLoading(false);
+          setIsAuthReady(true);
+          return;
+        } catch (e) {
+          // ignore
+        }
+      }
+
       setSupabaseUser(sUser);
       if (sUser) {
-        const profile = await getUserProfile(sUser.id);
+        const profile = await getUserProfile(sUser.id || sUser.uid);
         setUser({ ...profile, email: sUser.email } as any); // Include email
       } else {
         setUser(null);

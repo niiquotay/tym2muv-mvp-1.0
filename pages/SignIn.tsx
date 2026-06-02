@@ -49,24 +49,36 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
   };
 
   return (
-    <div id="signin-root-container" className="min-h-[85vh] flex items-center justify-center px-4 py-12 relative overflow-hidden bg-gradient-to-tr from-purple-100/80 via-fuchsia-50/60 to-indigo-100/80">
-      {/* Dynamic Futuristic Glow Backdrops */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-gradient-to-tr from-purple-400/30 to-indigo-300/30 rounded-full blur-[110px] pointer-events-none"></div>
-      <div className="absolute top-1/4 left-1/3 w-[350px] h-[350px] bg-fuchsia-400/20 rounded-full blur-[90px] pointer-events-none"></div>
+    <div id="signin-root-container" className="min-h-screen w-full flex items-center justify-center px-4 py-16 relative overflow-hidden bg-gradient-to-tr from-purple-100/80 via-fuchsia-50/60 to-indigo-100/80">
+      {/* Heavy Quantum Field Ambient Glows */}
+      <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-gradient-to-tr from-purple-400/20 to-indigo-300/20 rounded-full blur-[140px] pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] bg-fuchsia-400/10 rounded-full blur-[120px] pointer-events-none"></div>
 
       <div id="signin-container-card" className="w-full max-w-4xl bg-white/70 backdrop-blur-2xl border border-white/60 rounded-[3rem] shadow-[0_40px_90px_rgba(147,51,234,0.12),inset_0_1px_2px_0_rgba(255,255,255,0.7)] p-12 md:p-20 relative overflow-hidden animate-slide-up">
-        
-        {/* Futuristic Laser Light Accents */}
+        {/* Neon Laser Security Framing */}
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-purple-400/40 to-transparent"></div>
         <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-indigo-400/30 to-transparent"></div>
 
         <div className="relative z-10 flex flex-col items-center">
-          
-          <Link to="/">
-            <Logo className="mb-12 scale-125 transition-all duration-300" />
+          <Link to="/" className="mb-4">
+            <Logo className="scale-125 transition-all duration-300" />
           </Link>
           
-
+          <div className="text-center mb-10">
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-purple-500/25 bg-purple-50 text-brand-600 text-[10px] font-mono font-bold tracking-widest uppercase mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-600 animate-pulse"></span>
+              {isSignUp ? 'SECURE REGISTRATION GATEWAY' : 'SECURE AUTHENTICATION GATEWAY'}
+            </span>
+            <h1 className="text-2xl md:text-3xl font-bold font-sans tracking-tight text-slate-900 mb-2">
+              {isSignUp ? 'Create CaliberDesk Account' : 'Welcome to CaliberDesk'}
+            </h1>
+            <p className="text-slate-600 text-xs md:text-sm max-w-md mx-auto font-medium">
+              {isSignUp 
+                ? 'Join our hyper-growth global workforce matching top-tier talent with world-class agents.'
+                : 'Access your secure candidate dashboard, active jobs, and custom listings.'
+              }
+            </p>
+          </div>
 
           <div className="space-y-8 w-full">
             {error && (
@@ -145,11 +157,25 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
               </button>
             </div>
 
-
+            <div className="pt-6 text-center">
+              {isSignUp ? (
+                <Link
+                  to="/signin"
+                  className="text-xs font-mono tracking-wider text-slate-500 hover:text-brand-600 transition-colors"
+                >
+                  // Already registered? Decrypt existing credential gateway
+                </Link>
+              ) : (
+                <Link
+                  to="/signup"
+                  className="text-xs font-mono tracking-wider text-slate-500 hover:text-brand-600 transition-colors"
+                >
+                  // Missing keys? Provision a new active secure profile
+                </Link>
+              )}
+            </div>
           </div>
         </div>
-
-
       </div>
     </div>
   );

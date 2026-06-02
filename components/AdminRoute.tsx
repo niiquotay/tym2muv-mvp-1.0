@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../supabaseClient';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -17,6 +17,12 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
         setIsAdmin(false);
         return;
       }
+      
+      if (!isSupabaseConfigured) {
+        setIsAdmin(user.role === 'Admin');
+        return;
+      }
+
       try {
         // Verify against the database, not JWT claims that the user can influence
         const { data, error } = await supabase
@@ -43,7 +49,7 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   }
 
   if (!isAdmin) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/admin-login" replace />;
   }
 
   return <>{children}</>;

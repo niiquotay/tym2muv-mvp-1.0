@@ -5,7 +5,7 @@ import { uploadImageToCloudinary } from './imageService';
 import { MOCK_LISTINGS, MOCK_USERS, MOCK_ADS, MOCK_CHATS } from './mockData';
 
 // --- AUTH SERVICES ---
-export const loginWithEmail = async (email: string, password: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
+export const loginWithEmail = async (email: string, password: string, selectedRole: 'Tenant' | 'Agent' | 'Admin' = 'Tenant') => {
   if (!isSupabaseConfigured) {
     const matchedUser = MOCK_USERS.find(u => u.socials?.email === email || (u as any).email === email);
     const mockUser = matchedUser || {
@@ -34,7 +34,7 @@ export const loginWithEmail = async (email: string, password: string, selectedRo
   return Object.assign(data.user, { isNewAccount: false, role: selectedRole, uid: data.user?.id });
 };
 
-export const signupWithEmail = async (email: string, password: string, name: string, selectedRole: 'Tenant' | 'Agent' = 'Tenant') => {
+export const signupWithEmail = async (email: string, password: string, name: string, selectedRole: 'Tenant' | 'Agent' | 'Admin' = 'Tenant') => {
   if (!isSupabaseConfigured) {
     const mockUser = {
       id: `gen-user-${Date.now()}`,
@@ -77,18 +77,21 @@ export const logout = async () => {
 };
 
 export const subscribeToAuth = (callback: (user: any | null) => void) => {
+  const getMockUser = () => {
+    const uStr = localStorage.getItem('caliber_mock_user');
+    if (uStr) {
+      try {
+        return JSON.parse(uStr);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+
   if (!isSupabaseConfigured) {
     const checkUser = () => {
-      const uStr = localStorage.getItem('caliber_mock_user');
-      if (uStr) {
-        try {
-          callback(JSON.parse(uStr));
-        } catch (e) {
-          callback(null);
-        }
-      } else {
-        callback(null);
-      }
+      callback(getMockUser());
     };
     checkUser();
     // Monitor storage changes
@@ -97,10 +100,37 @@ export const subscribeToAuth = (callback: (user: any | null) => void) => {
     return () => window.removeEventListener('storage', handler);
   }
   
+  // When Supabase is configured, check if a mock admin or user is active first
+  const currentMock = getMockUser();
+  if (currentMock) {
+    callback(currentMock);
+  }
+
   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    callback(session?.user || null);
+    const activeMock = getMockUser();
+    if (activeMock) {
+      callback(activeMock);
+    } else {
+      callback(session?.user || null);
+    }
   });
-  return () => subscription.unsubscribe();
+
+  const storageHandler = () => {
+    const activeMock = getMockUser();
+    if (activeMock) {
+      callback(activeMock);
+    } else {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        callback(session?.user || null);
+      });
+    }
+  };
+  window.addEventListener('storage', storageHandler);
+
+  return () => {
+    subscription.unsubscribe();
+    window.removeEventListener('storage', storageHandler);
+  };
 };
 
 export const sendPasswordResetEmail = async (email: string) => {

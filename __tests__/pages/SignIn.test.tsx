@@ -7,7 +7,8 @@ import { vi } from 'vitest';
 import * as supabaseService from '../../services/supabaseService';
 
 vi.mock('../../services/supabaseService', () => ({
-  loginWithEmail: vi.fn(),
+  loginWithGoogle: vi.fn(),
+  loginWithLinkedIn: vi.fn(),
   getUserProfile: vi.fn().mockResolvedValue({ id: '1', role: 'Customer', name: 'Test' }),
   subscribeToAuth: vi.fn().mockReturnValue(() => {})
 }));
@@ -27,47 +28,33 @@ describe('SignIn Page', () => {
     vi.clearAllMocks();
   });
 
-  it('renders login form correctly', () => {
+  it('renders login options correctly', () => {
     renderWithRouter(<SignIn />);
-    expect(screen.getByPlaceholderText('Email address')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
+    expect(screen.getByTitle('Sign in with Google')).toBeInTheDocument();
+    expect(screen.getByTitle('Sign in with LinkedIn')).toBeInTheDocument();
   });
 
-  it('displays error on failed login', async () => {
-    (supabaseService.loginWithEmail as any).mockRejectedValue(new Error('Invalid credentials'));
-    
+  it('calls loginWithGoogle on Google button click', async () => {
     renderWithRouter(<SignIn />);
     
-    // We also need to fix missing 'act' wrapping for form click. 
-    // And actually, since there are animations or loading states, it's better to wrap the click in act if it doesn't await a waitFor immediately?
-    
-    fireEvent.change(screen.getByPlaceholderText('Email address'), { target: { value: 'test@example.com' } });
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'wrong' } });
-    
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Sign In/i }));
+      fireEvent.click(screen.getByTitle('Sign in with Google'));
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Invalid credentials')).toBeInTheDocument();
+      expect(supabaseService.loginWithGoogle).toHaveBeenCalled();
     });
   });
 
-  it('calls loginWithEmail on successful form submission', async () => {
-    (supabaseService.loginWithEmail as any).mockResolvedValue({ id: '1' });
-    
+  it('calls loginWithLinkedIn on LinkedIn button click', async () => {
     renderWithRouter(<SignIn />);
     
-    fireEvent.change(screen.getByPlaceholderText('Email address'), { target: { value: 'test@example.com' } });
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'correct' } });
-    
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Sign In/i }));
+      fireEvent.click(screen.getByTitle('Sign in with LinkedIn'));
     });
 
     await waitFor(() => {
-      expect(supabaseService.loginWithEmail).toHaveBeenCalledWith('test@example.com', 'correct', 'Tenant');
+      expect(supabaseService.loginWithLinkedIn).toHaveBeenCalled();
     });
   });
 });
