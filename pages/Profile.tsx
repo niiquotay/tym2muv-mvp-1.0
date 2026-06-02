@@ -312,6 +312,7 @@ const Profile: React.FC = () => {
                                     cta={item.data.cta}
                                     image={item.data.image}
                                     color={item.data.color}
+                                    className={`col-start-1 sm:col-start-${(idx % 2) + 1} lg:col-start-${(idx % 3) + 1} xl:col-start-${(idx % 4) + 1}`}
                                 />
                             )
                         ))}

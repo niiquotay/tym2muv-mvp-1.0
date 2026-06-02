@@ -418,6 +418,9 @@ const Home: React.FC = () => {
                           image={item.data.image}
                           color={item.data.color}
                           link={item.data.link}
+                          className={`${
+                            idx % 2 === 0 ? 'col-start-1' : 'col-start-2'
+                          } min-[420px]:col-start-${(idx % 3) + 1} sm:col-start-${(idx % 4) + 1} md:col-start-${(idx % 5) + 1} lg:col-start-${(idx % 6) + 1}`}
                         />
                       )
                     ))}

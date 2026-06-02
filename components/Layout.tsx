@@ -140,6 +140,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate(`/search?${searchParams.toString()}`);
   };
 
+  const isAuthPage = location.pathname === '/signin' || location.pathname === '/signup';
+
+  if (isAuthPage) {
+    return (
+      <div className="min-h-screen flex flex-col relative overflow-x-hidden bg-white font-sans">
+        <main className="flex-grow flex items-center justify-center relative z-0">
+          {children}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col relative overflow-x-hidden bg-white font-sans">
       {needsCountrySelection && <CountrySelectionModal />}

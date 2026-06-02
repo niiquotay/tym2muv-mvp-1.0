@@ -13,9 +13,10 @@ interface AdCardProps {
   image: string;
   color?: string;
   link?: string;
+  className?: string;
 }
 
-const AdCard: React.FC<AdCardProps> = ({ id, type, title, description, cta, image, color = 'from-brand-600 to-fuchsia-600', link }) => {
+const AdCard: React.FC<AdCardProps> = ({ id, type, title, description, cta, image, color = 'from-brand-600 to-fuchsia-600', link, className = '' }) => {
   const isTall = type === 'tall';
 
   useEffect(() => {
@@ -74,7 +75,7 @@ const AdCard: React.FC<AdCardProps> = ({ id, type, title, description, cta, imag
     </>
   );
 
-  const containerClasses = `relative overflow-hidden rounded-2xl flex flex-col ${isTall ? 'row-span-2 h-full' : 'min-h-[160px] sm:h-full'} group shadow-sm border border-slate-100 cursor-pointer block w-full text-left`;
+  const containerClasses = `relative overflow-hidden rounded-2xl flex flex-col ${isTall ? 'row-span-2 h-full' : 'min-h-[160px] sm:h-full'} group shadow-sm border border-slate-100 cursor-pointer block w-full text-left ${className}`;
 
   if (link) {
     return (
