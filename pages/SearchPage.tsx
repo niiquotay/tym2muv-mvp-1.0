@@ -242,7 +242,7 @@ const SearchPage: React.FC = () => {
       
       <div className="container mx-auto px-4">
         {/* Category Filter Pills */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6 animate-slide-up w-full">
+        <div id="category-filter-grid" className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-3 mb-6 animate-slide-up w-full">
           {[
             { id: 'all', name: 'All Categories', icon: 'globe' },
             { id: 'houses', name: 'Houses & Apartments', icon: 'home' },
@@ -254,6 +254,7 @@ const SearchPage: React.FC = () => {
             return (
               <button
                 key={cat.id}
+                id={`cat-filter-btn-${cat.id}`}
                 onClick={() => {
                   const newSearchParams = new URLSearchParams(searchParams);
                   if (cat.id === 'all') {
@@ -263,14 +264,14 @@ const SearchPage: React.FC = () => {
                   }
                   navigate(`${location.pathname}?${newSearchParams.toString()}`);
                 }}
-                className={`flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all duration-200 w-full text-center ${
+                className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1.5 py-2.5 sm:px-4 sm:py-3.5 rounded-xl sm:rounded-2xl text-[10px] sm:text-sm font-bold transition-all duration-200 w-full text-center ${
                   isActive 
                     ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20 scale-[1.02] ring-2 ring-purple-500/20' 
                     : 'bg-white text-slate-600 shadow-sm hover:bg-slate-50 border border-slate-200/50 hover:text-slate-900'
                 }`}
               >
-                <Icon name={cat.icon} size={16} />
-                <span>{cat.name}</span>
+                <Icon name={cat.icon} size={14} className="sm:w-4 sm:h-4" />
+                <span className="line-clamp-2 sm:line-clamp-none text-center leading-tight">{cat.name}</span>
               </button>
             );
           })}

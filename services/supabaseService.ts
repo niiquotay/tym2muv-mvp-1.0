@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
-import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review, Payment, ViewRequest } from '../types';
+import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review, Payment, ViewRequest, StaticPage, BlogPost } from '../types';
 import { withCache, delCache, invalidateCachePrefix, CACHE_TTL, cacheKey } from './cacheService';
 import { uploadImageToCloudinary } from './imageService';
 import { MOCK_LISTINGS, MOCK_USERS, MOCK_ADS, MOCK_CHATS } from './mockData';
@@ -973,4 +973,352 @@ export const createReview = async (review: any): Promise<string> => {
   if (error) throw error;
   return data.id;
 };
+
+// --- CMS / STATIC PAGES & BLOG POST SERVICES ---
+
+const DEFAULT_STATIC_PAGES: StaticPage[] = [
+  {
+    id: 'about-us',
+    slug: 'about-us',
+    title: 'About CaliberDesk',
+    content: `# About CaliberDesk\n\nWelcome to **CaliberDesk**, the premium, secure, and production-ready job matching and real-estate transaction platform designed to keep your workflows efficient and compliant.\n\n### Our Mission\nOur mission is to establish durable, secure linkages between candidates, tenants, agents, and admins under strict performance guarantees.\n\n### Core System Specifications\n- **Enterprise Scale**: Servicing up to 5,000 active daily profiles with zero sub-millisecond degradation.\n- **Ultimate Safety**: Implemented with military-grade transport layer security rules and comprehensive Cloudflare firewall locks.\n- **Global Access**: Real-time localized IP geo-conversion across multiple trade zones.\n\nThank you for choosing CaliberDesk.`,
+    published: true,
+    metaTitle: 'About CaliberDesk - Job and Property Gateway',
+    metaDescription: 'Learn more about CaliberDesk system guidelines and our mission to streamline workspace management.',
+    createdAt: new Date('2026-06-01T12:00:00Z').toISOString(),
+    updatedAt: new Date('2026-06-01T12:00:00Z').toISOString()
+  },
+  {
+    id: 'terms-of-service',
+    slug: 'terms',
+    title: 'Terms of Service',
+    content: `# Terms of Service\n\n*Effective Date: June 1, 2026*\n\nPlease study these Terms of Service carefully before utilizing any portal services. By engaging with CaliberDesk, you agree to comply with all specified terms.\n\n## 1. System Compliance\nUsers must preserve credential isolation and must never bypass access gateways.\n\n## 2. Platform Usage & License\nWe grant you a restricted, non-transferable licence to load and view assets under standard developer bounds.\n\n## 3. Disclaimers\nCaliberDesk assumes no liability for external networks or third-party web endpoints. Contact our engineering team for specialized enterprise deployments.`,
+    published: true,
+    metaTitle: 'Terms of Service - CaliberDesk Secure Gateway',
+    metaDescription: 'Official site terms and user compliance policies for CaliberDesk applications.',
+    createdAt: new Date('2026-06-01T12:00:00Z').toISOString(),
+    updatedAt: new Date('2026-06-01T12:00:00Z').toISOString()
+  },
+  {
+    id: 'privacy-policy',
+    slug: 'privacy',
+    title: 'Privacy Policy',
+    content: `# Privacy Policy\n\n*Last Updated: June 1, 2026*\n\nYour telemetry privacy and credential integrity represent our highest priority. This Policy outlines how we manage profile fields.\n\n### 1. Information We Collect\n- **Sign-in Identifiers**: Sanitized names and emails accessed via Google/LinkedIn providers.\n- **Local Cache**: Location telemetry converted client-side for dynamic displays.\n\n### 2. Encryption Norms\nAll active tokens are enveloped using industry-standard TLS algorithms before hitting Supabase database partitions. Keys are never logged in plain text.`,
+    published: true,
+    metaTitle: 'Privacy Policy - CaliberDesk Information Protection',
+    metaDescription: 'Understand how CaliberDesk manages secure user credentials and privacy.',
+    createdAt: new Date('2026-06-01T12:00:00Z').toISOString(),
+    updatedAt: new Date('2026-06-01T12:00:00Z').toISOString()
+  }
+];
+
+const DEFAULT_BLOG_POSTS: BlogPost[] = [
+  {
+    id: 'blog-post-1',
+    slug: 'navigating-2026-real-estate-peaks',
+    title: 'Navigating Commercial Real Estate in 2026',
+    excerpt: 'An exhaustive analysis of office demand trends, workspace density shifts, and prime co-working corridor values.',
+    content: `## The Modern Workspace Frontier in 2026\n\nAs the commercial landscape adjusts, we observe a dramatic acceleration toward **highly dense, hybrid workspace corridors** across major technological epicenters.\n\n### 1. Location Optimization\nProximity to public rapid-transit channels is now the primary price driver for multi-story office lots. Commuters prioritize space layout flexibility over raw square-footage.\n\n### 2. High Density and Low Waste\nModern developers are replacing monolithic cubicle rings with responsive **modular benches** and soundproof phone silos.\n\n> "Efficiency is no longer about maximizing raw desks; it is about maximizing active hours per square meter."\n\nWe anticipate commercial rentals in prime West-African and European tech cities to grow by an average of **14%** over the coming fiscal semester.`,
+    published: true,
+    coverImage: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80',
+    authorName: 'Evelyn Sterling',
+    category: 'Market Analysis',
+    readTime: '5 min read',
+    createdAt: new Date('2026-06-02T10:00:00Z').toISOString(),
+    updatedAt: new Date('2026-06-02T10:00:00Z').toISOString()
+  },
+  {
+    id: 'blog-post-2',
+    slug: 'top-tips-for-buying-studio-condos',
+    title: 'Top Tips for Savvy Studio Condo Buyers',
+    excerpt: 'Essential tactics to verify structural safety, navigate zero-down mortgages, and maximize rent yield.',
+    content: `## Buying Your First Urban Studio\n\nUrban studio flats present unmatched capitalization upside for initial investors. However, buying without an exhaustive checklist can bind your capital in low-yield properties.\n\n### The Golden Checklist:\n1. **Verify Utility Subcards**: Inspect electrical substations and water safety meters.\n2. **Negotiate Mortgage Rates**: Look for down-payment match programs or local municipal credits.\n3. **Assess Tenant Intent**: If renting out, study listing prices inside a 1-mile radius.\n\nWith CaliberDesk, you can find active portfolios that align perfectly with modern buyer standards.`,
+    published: true,
+    coverImage: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
+    authorName: 'Marcus Vance',
+    category: 'Investment Guides',
+    readTime: '4 min read',
+    createdAt: new Date('2026-06-01T08:30:00Z').toISOString(),
+    updatedAt: new Date('2026-06-01T08:30:00Z').toISOString()
+  }
+];
+
+const getLocalPages = (): StaticPage[] => {
+  const p = localStorage.getItem('cms_static_pages');
+  if (!p) {
+    localStorage.setItem('cms_static_pages', JSON.stringify(DEFAULT_STATIC_PAGES));
+    return DEFAULT_STATIC_PAGES;
+  }
+  try {
+    return JSON.parse(p);
+  } catch (_) {
+    return DEFAULT_STATIC_PAGES;
+  }
+};
+
+const saveLocalPages = (pages: StaticPage[]) => {
+  localStorage.setItem('cms_static_pages', JSON.stringify(pages));
+};
+
+const getLocalPosts = (): BlogPost[] => {
+  const p = localStorage.getItem('cms_blog_posts');
+  if (!p) {
+    localStorage.setItem('cms_blog_posts', JSON.stringify(DEFAULT_BLOG_POSTS));
+    return DEFAULT_BLOG_POSTS;
+  }
+  try {
+    return JSON.parse(p);
+  } catch (_) {
+    return DEFAULT_BLOG_POSTS;
+  }
+};
+
+const saveLocalPosts = (posts: BlogPost[]) => {
+  localStorage.setItem('cms_blog_posts', JSON.stringify(posts));
+};
+
+export const getStaticPages = async (): Promise<StaticPage[]> => {
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.from('cms_pages').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        return data.map((p: any) => ({
+          id: p.id,
+          slug: p.slug,
+          title: p.title,
+          content: p.content,
+          published: p.published,
+          metaTitle: p.meta_title,
+          metaDescription: p.meta_description,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at
+        }));
+      }
+    } catch (e) {
+      console.warn('Supabase cms_pages failed, falling back to local files', e);
+    }
+  }
+  return getLocalPages();
+};
+
+export const getStaticPageBySlug = async (slug: string): Promise<StaticPage | null> => {
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.from('cms_pages').select('*').eq('slug', slug).maybeSingle();
+      if (!error && data) {
+        return {
+          id: data.id,
+          slug: data.slug,
+          title: data.title,
+          content: data.content,
+          published: data.published,
+          metaTitle: data.meta_title,
+          metaDescription: data.meta_description,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at
+        };
+      }
+    } catch (_) {}
+  }
+  const pages = getLocalPages();
+  const page = pages.find(p => p.slug === slug || p.id === slug);
+  return page || null;
+};
+
+export const createStaticPage = async (page: Omit<StaticPage, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  const now = new Date().toISOString();
+  const id = `page-${Date.now()}`;
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.from('cms_pages').insert({
+        id,
+        slug: page.slug,
+        title: page.title,
+        content: page.content,
+        published: page.published,
+        meta_title: page.metaTitle,
+        meta_description: page.metaDescription,
+        created_at: now,
+        updated_at: now
+      }).select('id').single();
+      if (!error && data) return data.id;
+    } catch (e) {
+      console.warn('Fallback to local page creation', e);
+    }
+  }
+  const pages = getLocalPages();
+  pages.push({ ...page, id, createdAt: now, updatedAt: now });
+  saveLocalPages(pages);
+  return id;
+};
+
+export const updateStaticPage = async (id: string, page: Partial<StaticPage>): Promise<void> => {
+  const now = new Date().toISOString();
+  if (isSupabaseConfigured) {
+    try {
+      const dbPayload: any = { updated_at: now };
+      if (page.title !== undefined) dbPayload.title = page.title;
+      if (page.slug !== undefined) dbPayload.slug = page.slug;
+      if (page.content !== undefined) dbPayload.content = page.content;
+      if (page.published !== undefined) dbPayload.published = page.published;
+      if (page.metaTitle !== undefined) dbPayload.meta_title = page.metaTitle;
+      if (page.metaDescription !== undefined) dbPayload.meta_description = page.metaDescription;
+
+      const { error } = await supabase.from('cms_pages').update(dbPayload).eq('id', id);
+      if (!error) return;
+    } catch (e) {
+      console.warn('Fallback to local page update', e);
+    }
+  }
+  const pages = getLocalPages();
+  const idx = pages.findIndex(p => p.id === id);
+  if (idx !== -1) {
+    pages[idx] = { ...pages[idx], ...page, updatedAt: now };
+    saveLocalPages(pages);
+  }
+};
+
+export const deleteStaticPage = async (id: string): Promise<void> => {
+  if (isSupabaseConfigured) {
+    try {
+      const { error } = await supabase.from('cms_pages').delete().eq('id', id);
+      if (!error) return;
+    } catch (e) {
+      console.warn('Fallback to local page deletion', e);
+    }
+  }
+  const pages = getLocalPages();
+  const filtered = pages.filter(p => p.id !== id);
+  saveLocalPages(filtered);
+};
+
+// --- BLOG POST SERVICES ---
+
+export const getBlogPosts = async (): Promise<BlogPost[]> => {
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.from('blog_posts').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        return data.map((b: any) => ({
+          id: b.id,
+          slug: b.slug,
+          title: b.title,
+          excerpt: b.excerpt,
+          content: b.content,
+          published: b.published,
+          coverImage: b.cover_image,
+          authorName: b.author_name,
+          category: b.category,
+          readTime: b.read_time,
+          createdAt: b.created_at,
+          updatedAt: b.updated_at
+        }));
+      }
+    } catch (e) {
+      console.warn('Supabase blog_posts query failed, falling back to local files', e);
+    }
+  }
+  return getLocalPosts();
+};
+
+export const getBlogPostBySlug = async (slug: string): Promise<BlogPost | null> => {
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.from('blog_posts').select('*').eq('slug', slug).maybeSingle();
+      if (!error && data) {
+        return {
+          id: data.id,
+          slug: data.slug,
+          title: data.title,
+          excerpt: data.excerpt,
+          content: data.content,
+          published: data.published,
+          coverImage: data.cover_image,
+          authorName: data.author_name,
+          category: data.category,
+          readTime: data.read_time,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at
+        };
+      }
+    } catch (_) {}
+  }
+  const posts = getLocalPosts();
+  const post = posts.find(b => b.slug === slug || b.id === slug);
+  return post || null;
+};
+
+export const createBlogPost = async (post: Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  const now = new Date().toISOString();
+  const id = `blog-${Date.now()}`;
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.from('blog_posts').insert({
+        id,
+        slug: post.slug,
+        title: post.title,
+        excerpt: post.excerpt,
+        content: post.content,
+        published: post.published,
+        cover_image: post.coverImage,
+        author_name: post.authorName,
+        category: post.category,
+        read_time: post.readTime || '4 min read',
+        created_at: now,
+        updated_at: now
+      }).select('id').single();
+      if (!error && data) return data.id;
+    } catch (e) {
+      console.warn('Fallback to local blog post creation', e);
+    }
+  }
+  const posts = getLocalPosts();
+  posts.push({ ...post, id, createdAt: now, updatedAt: now });
+  saveLocalPosts(posts);
+  return id;
+};
+
+export const updateBlogPost = async (id: string, post: Partial<BlogPost>): Promise<void> => {
+  const now = new Date().toISOString();
+  if (isSupabaseConfigured) {
+    try {
+      const dbPayload: any = { updated_at: now };
+      if (post.title !== undefined) dbPayload.title = post.title;
+      if (post.slug !== undefined) dbPayload.slug = post.slug;
+      if (post.excerpt !== undefined) dbPayload.excerpt = post.excerpt;
+      if (post.content !== undefined) dbPayload.content = post.content;
+      if (post.published !== undefined) dbPayload.published = post.published;
+      if (post.coverImage !== undefined) dbPayload.cover_image = post.coverImage;
+      if (post.authorName !== undefined) dbPayload.author_name = post.authorName;
+      if (post.category !== undefined) dbPayload.category = post.category;
+      if (post.readTime !== undefined) dbPayload.read_time = post.readTime;
+
+      const { error } = await supabase.from('blog_posts').update(dbPayload).eq('id', id);
+      if (!error) return;
+    } catch (e) {
+      console.warn('Fallback to local blog update', e);
+    }
+  }
+  const posts = getLocalPosts();
+  const idx = posts.findIndex(b => b.id === id);
+  if (idx !== -1) {
+    posts[idx] = { ...posts[idx], ...post, updatedAt: now };
+    saveLocalPosts(posts);
+  }
+};
+
+export const deleteBlogPost = async (id: string): Promise<void> => {
+  if (isSupabaseConfigured) {
+    try {
+      const { error } = await supabase.from('blog_posts').delete().eq('id', id);
+      if (!error) return;
+    } catch (e) {
+      console.warn('Fallback to local blog deletion', e);
+    }
+  }
+  const posts = getLocalPosts();
+  const filtered = posts.filter(b => b.id !== id);
+  saveLocalPosts(filtered);
+};
+
 

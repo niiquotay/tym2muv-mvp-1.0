@@ -46,13 +46,21 @@ import {
   createMonetizationAd,
   updateMonetizationAd,
   deleteMonetizationAd,
-  uploadImage
+  uploadImage,
+  getStaticPages,
+  createStaticPage,
+  updateStaticPage,
+  deleteStaticPage,
+  getBlogPosts,
+  createBlogPost,
+  updateBlogPost,
+  deleteBlogPost
 } from '../services/supabaseService';
 import { 
   seedMockData, 
   clearMockData 
 } from '../utils/seedMockData';
-import { User, Listing, Monetization } from '../types';
+import { User, Listing, Monetization, StaticPage, BlogPost } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { getSymbolFromCode } from '../services/location';
 
@@ -86,6 +94,144 @@ const AdminDashboard: React.FC = () => {
   const [previewColor, setPreviewColor] = useState('from-brand-600 to-indigo-600');
   const [previewType, setPreviewType] = useState<'standard' | 'tall'>('tall');
   const [previewImage, setPreviewImage] = useState('');
+
+  // CMS state helpers
+  const [cmsTab, setCmsTab] = useState<'pages' | 'blog'>('pages');
+  const [cmsPages, setCmsPages] = useState<StaticPage[]>([]);
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
+  const [cmsLoading, setCmsLoading] = useState(false);
+  const [showCmsModal, setShowCmsModal] = useState(false);
+  const [editingPage, setEditingPage] = useState<StaticPage | null>(null);
+  const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
+
+  // Form states for CMS Page
+  const [pageForm, setPageForm] = useState({
+    title: '',
+    slug: '',
+    content: '',
+    published: true,
+    metaTitle: '',
+    metaDescription: ''
+  });
+
+  // Form states for BlogPost
+  const [postForm, setPostForm] = useState({
+    title: '',
+    slug: '',
+    excerpt: '',
+    content: '',
+    published: true,
+    coverImage: '',
+    authorName: '',
+    category: 'Market Analysis',
+    readTime: '4 min read'
+  });
+
+  // CMS CRUD actions
+  const handleOpenPageCreate = () => {
+    setEditingPage(null);
+    setPageForm({
+      title: '',
+      slug: '',
+      content: '# New Page\\n\\nWrite content here.',
+      published: true,
+      metaTitle: '',
+      metaDescription: ''
+    });
+    setEditingPost(null);
+    setShowCmsModal(true);
+  };
+
+  const handleOpenPageEdit = (page: StaticPage) => {
+    setEditingPage(page);
+    setPageForm({
+      title: page.title,
+      slug: page.slug,
+      content: page.content,
+      published: page.published,
+      metaTitle: page.metaTitle || '',
+      metaDescription: page.metaDescription || ''
+    });
+    setEditingPost(null);
+    setShowCmsModal(true);
+  };
+
+  const handleOpenPostCreate = () => {
+    setEditingPost(null);
+    setPostForm({
+      title: '',
+      slug: '',
+      excerpt: '',
+      content: '## New Post\\n\\nStart writing in Markdown.',
+      published: true,
+      coverImage: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80',
+      authorName: 'Admin Specialist',
+      category: 'Market Analysis',
+      readTime: '4 min read'
+    });
+    setEditingPage(null);
+    setShowCmsModal(true);
+  };
+
+  const handleOpenPostEdit = (post: BlogPost) => {
+    setEditingPost(post);
+    setPostForm({
+      title: post.title,
+      slug: post.slug,
+      excerpt: post.excerpt,
+      content: post.content,
+      published: post.published,
+      coverImage: post.coverImage || '',
+      authorName: post.authorName,
+      category: post.category,
+      readTime: post.readTime || '4 min read'
+    });
+    setEditingPage(null);
+    setShowCmsModal(true);
+  };
+
+  const handleCmsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCmsLoading(true);
+    try {
+      if (cmsTab === 'pages') {
+        if (editingPage) {
+          await updateStaticPage(editingPage.id, pageForm);
+        } else {
+          await createStaticPage(pageForm);
+        }
+      } else {
+        if (editingPost) {
+          await updateBlogPost(editingPost.id, postForm);
+        } else {
+          await createBlogPost(postForm);
+        }
+      }
+      setShowCmsModal(false);
+      setEditingPage(null);
+      setEditingPost(null);
+      fetchData();
+    } catch (err) {
+      console.error('Failed to save CMS item:', err);
+      alert('Error saving data. Please verify fields.');
+    } finally {
+      setCmsLoading(false);
+    }
+  };
+
+  const handleDeletePage = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this static page? Users will no longer be able to load it.')) {
+      await deleteStaticPage(id);
+      fetchData();
+    }
+  };
+
+  const handleDeletePost = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this blog post?')) {
+      await deleteBlogPost(id);
+      fetchData();
+    }
+  };
 
   useEffect(() => {
     if (showAdModal) {
@@ -147,6 +293,11 @@ const AdminDashboard: React.FC = () => {
       } else if (activeTab === 'monetization') {
         const adsData = await getMonetizationAds();
         setAds(adsData);
+      } else if (activeTab === 'pages') {
+        const pagesData = await getStaticPages();
+        setCmsPages(pagesData);
+        const blogsData = await getBlogPosts();
+        setBlogPosts(blogsData);
       }
     } catch (error) {
       console.error(`Error fetching admin data for ${activeTab}:`, error);
@@ -799,15 +950,486 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'pages' && (
             <motion.div 
               key="pages"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-white p-12 rounded-2xl border border-gray-100 shadow-sm text-center"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              className="space-y-6"
             >
-              <Settings size={48} className="mx-auto text-gray-200 mb-4" />
-              <h2 className="text-xl font-bold text-gray-900 mb-2">CMS Coming Soon</h2>
-              <p className="text-gray-500 max-w-md mx-auto">
-                We're building a powerful content management system to help you manage static pages and blog posts directly from this dashboard.
-              </p>
+              {/* CMS Tab Bar Header */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm gap-4">
+                <div className="flex bg-slate-100 p-1.5 rounded-xl gap-1">
+                  <button
+                    onClick={() => setCmsTab('pages')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${cmsTab === 'pages' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                  >
+                    Static Pages
+                  </button>
+                  <button
+                    onClick={() => setCmsTab('blog')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${cmsTab === 'blog' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                  >
+                    Blog Posts
+                  </button>
+                </div>
+                
+                <button
+                  onClick={cmsTab === 'pages' ? handleOpenPageCreate : handleOpenPostCreate}
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shadow-orange-500/10"
+                >
+                  <Plus size={16} />
+                  <span>Create {cmsTab === 'pages' ? 'Static Page' : 'Blog Article'}</span>
+                </button>
+              </div>
+
+              {/* Static Pages List view */}
+              {cmsTab === 'pages' ? (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden pb-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50/50 text-[10px] uppercase text-slate-500 font-mono tracking-wider border-b border-slate-100">
+                          <th className="px-6 py-4">Title</th>
+                          <th className="px-6 py-4">Slug</th>
+                          <th className="px-6 py-4">Meta Title</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {cmsPages.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="text-center py-12 text-slate-400 text-xs font-medium">
+                              No static pages defined. Click the button above to add one.
+                            </td>
+                          </tr>
+                        ) : (
+                          cmsPages.map(page => (
+                            <tr key={page.id} className="text-xs text-slate-650 hover:bg-slate-50/40 font-medium">
+                              <td className="px-6 py-4 font-bold text-slate-900">{page.title}</td>
+                              <td className="px-6 py-4 font-mono text-blue-600">{page.slug}</td>
+                              <td className="px-6 py-4 text-slate-500 truncate max-w-[180px]">{page.metaTitle || '-'}</td>
+                              <td className="px-6 py-4">
+                                <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${page.published ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-600 border border-slate-150'}`}>
+                                  {page.published ? 'Published' : 'Draft'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right space-x-2">
+                                <a 
+                                  href={`/info/${page.slug}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-bold transition-all text-center"
+                                >
+                                  <ExternalLink size={12} /> Preview
+                                </a>
+                                <button 
+                                  onClick={() => handleOpenPageEdit(page)}
+                                  className="inline-flex items-center gap-1 px-2 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                >
+                                  <Edit2 size={13} /> Edit
+                                </button>
+                                <button 
+                                  onClick={() => handleDeletePage(page.id)}
+                                  className="inline-flex items-center gap-1 px-2 py-1.5 text-red-650 hover:bg-red-50 rounded-lg transition-all font-bold"
+                                >
+                                  <Trash2 size={13} /> Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                /* Blogs Listing View */
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden pb-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50/50 text-[10px] uppercase text-slate-500 font-mono tracking-wider border-b border-slate-100">
+                          <th className="px-6 py-4">Image & Title</th>
+                          <th className="px-6 py-4">Author & Cat</th>
+                          <th className="px-6 py-4">Excerpt</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {blogPosts.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="text-center py-12 text-slate-400 text-xs font-medium">
+                              No blog posts defined. Click the button above to author an article.
+                            </td>
+                          </tr>
+                        ) : (
+                          blogPosts.map(post => (
+                            <tr key={post.id} className="text-xs text-slate-650 hover:bg-slate-50/40 font-medium">
+                              <td className="px-6 py-3 flex items-center gap-3">
+                                <img 
+                                  src={post.coverImage || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80"}
+                                  alt={post.title}
+                                  className="w-10 h-8 rounded-lg object-cover bg-slate-50 border border-slate-100 flex-shrink-0"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div>
+                                  <div className="font-bold text-slate-900 leading-tight mb-0.5">{post.title}</div>
+                                  <div className="font-mono text-[10px] text-blue-600">/{post.slug}</div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-3">
+                                <div className="text-slate-800 font-bold">{post.authorName}</div>
+                                <div className="text-[10px] text-slate-450 uppercase tracking-wider font-semibold font-mono">{post.category}</div>
+                              </td>
+                              <td className="px-6 py-3 text-slate-500 truncate max-w-[200px] leading-relaxed">{post.excerpt}</td>
+                              <td className="px-6 py-3">
+                                <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${post.published ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-600 border border-slate-150'}`}>
+                                  {post.published ? 'Published' : 'Draft'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-3 text-right space-x-2">
+                                <a 
+                                  href={`/blog/${post.slug}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-bold transition-all text-center"
+                                >
+                                  <ExternalLink size={12} /> Preview
+                                </a>
+                                <button 
+                                  onClick={() => handleOpenPostEdit(post)}
+                                  className="inline-flex items-center gap-1 px-2 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                >
+                                  <Edit2 size={13} /> Edit
+                                </button>
+                                <button 
+                                  onClick={() => handleDeletePost(post.id)}
+                                  className="inline-flex items-center gap-1 px-2 py-1.5 text-red-650 hover:bg-red-50 rounded-lg transition-all font-bold"
+                                >
+                                  <Trash2 size={13} /> Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic CMS modal editor */}
+              {showCmsModal && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden my-4 max-h-[92vh] flex flex-col"
+                  >
+                    {/* Header bar of modal */}
+                    <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-slate-50/80">
+                      <div>
+                        <h3 className="text-base font-black text-slate-900 tracking-tight">
+                          {cmsTab === 'pages' ? (editingPage ? `Edit Page: ${editingPage.title}` : 'Build New Static Page') : (editingPost ? `Edit Article: ${editingPost.title}` : 'Draft New Blog Article')}
+                        </h3>
+                        <p className="text-xs text-slate-500 font-medium">Use structured Markdown inputs. All draft adjustments are instantly reflected offline</p>
+                      </div>
+                      <button
+                        onClick={() => { setShowCmsModal(false); setEditingPage(null); setEditingPost(null); }}
+                        className="p-1.5 hover:bg-slate-200 text-slate-400 hover:text-slate-700 rounded-full transition-colors outline-none"
+                      >
+                        <XCircle size={22} />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleCmsSubmit} className="flex-1 flex flex-col overflow-hidden">
+                      {/* Inner double columns scrolling */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 overflow-hidden flex-1 max-h-[64vh] sm:max-h-[70vh]">
+                        {/* Fields Column */}
+                        <div className="lg:col-span-7 p-6 space-y-4 overflow-y-auto scroll-smooth">
+                          {cmsTab === 'pages' ? (
+                            /* Static Page Form fields */
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Page Title</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={pageForm.title}
+                                    onChange={(e) => {
+                                      const title = e.target.value;
+                                      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+                                      setPageForm({ ...pageForm, title, slug });
+                                    }}
+                                    placeholder="e.g. Terms of Service"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-semibold text-slate-800 bg-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">URL Slug</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={pageForm.slug}
+                                    onChange={(e) => setPageForm({ ...pageForm, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
+                                    placeholder="e.g. terms-of-service"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-mono text-blue-600 font-semibold bg-white"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Meta SEO Title (Optional)</label>
+                                  <input
+                                    type="text"
+                                    value={pageForm.metaTitle}
+                                    onChange={(e) => setPageForm({ ...pageForm, metaTitle: e.target.value })}
+                                    placeholder="About Us - Custom Portal Gateway"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-medium text-slate-800 bg-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Meta SEO Description (Optional)</label>
+                                  <input
+                                    type="text"
+                                    value={pageForm.metaDescription}
+                                    onChange={(e) => setPageForm({ ...pageForm, metaDescription: e.target.value })}
+                                    placeholder="A brief metadata layout search engines index"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-medium text-slate-850 bg-white"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-1">
+                                <div className="flex justify-between items-center">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Markdown Editor Body</label>
+                                  <span className="text-[9px] text-orange-600 font-black tracking-wider uppercase bg-orange-50 px-2 py-0.5 rounded-md">RAW MARKDOWN</span>
+                                </div>
+                                <textarea
+                                  required
+                                  rows={12}
+                                  value={pageForm.content}
+                                  onChange={(e) => setPageForm({ ...pageForm, content: e.target.value })}
+                                  placeholder="# Title Header&#10;Write clean markdown structures here...&#10;&#10;## Subtitle Section&#10;- Subpoint item&#10;**Bold compliance text**"
+                                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs text-slate-750 font-mono leading-relaxed bg-slate-50/50 resize-y min-h-[300px]"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            /* Blog Post Form fields */
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Article Title</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={postForm.title}
+                                    onChange={(e) => {
+                                      const title = e.target.value;
+                                      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+                                      setPostForm({ ...postForm, title, slug });
+                                    }}
+                                    placeholder="Trends in commercial lots 2026"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-bold text-slate-800 bg-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">URL Slug</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={postForm.slug}
+                                    onChange={(e) => setPostForm({ ...postForm, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
+                                    placeholder="commercial-peaks"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-mono text-blue-600 font-semibold bg-white"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Author Nickname</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={postForm.authorName}
+                                    onChange={(e) => setPostForm({ ...postForm, authorName: e.target.value })}
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-semibold text-slate-800 bg-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Category</label>
+                                  <select
+                                    value={postForm.category}
+                                    onChange={(e) => setPostForm({ ...postForm, category: e.target.value })}
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-bold text-slate-800 bg-white"
+                                  >
+                                    <option value="Market Analysis">Market Analysis</option>
+                                    <option value="Investment Guides">Investment Guides</option>
+                                    <option value="System Updates">System Updates</option>
+                                    <option value="Workspace Design">Workspace Design</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Est. Read Time</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={postForm.readTime}
+                                    onChange={(e) => setPostForm({ ...postForm, readTime: e.target.value })}
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-semibold text-slate-800 bg-white"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Cover Image URL</label>
+                                  <input
+                                    type="url"
+                                    value={postForm.coverImage}
+                                    onChange={(e) => setPostForm({ ...postForm, coverImage: e.target.value })}
+                                    placeholder="https://images.unsplash.com/..."
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs font-medium text-slate-850 bg-white"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Article Excerpt (Short description)</label>
+                                <textarea
+                                  required
+                                  rows={2}
+                                  value={postForm.excerpt}
+                                  onChange={(e) => setPostForm({ ...postForm, excerpt: e.target.value })}
+                                  placeholder="An exhaustive summary about structural trends, price spikes, or compliance updates..."
+                                  className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs text-slate-750 font-medium bg-white resize-none"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <div className="flex justify-between items-center">
+                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Markdown Editor Body</label>
+                                  <span className="text-[9px] text-orange-600 font-black tracking-wider uppercase bg-orange-50 px-2 py-0.5 rounded-md">RAW MARKDOWN</span>
+                                </div>
+                                <textarea
+                                  required
+                                  rows={10}
+                                  value={postForm.content}
+                                  onChange={(e) => setPostForm({ ...postForm, content: e.target.value })}
+                                  placeholder="## Modern peaks inside workspace rings&#10;&#10;Start writing your analysis in Markdown syntax...&#10;&#10;> 'Efficiency is the ultimate metric.'"
+                                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-xs text-slate-700 font-mono leading-relaxed bg-slate-50/50 resize-y min-h-[250px]"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Publishing State Switch */}
+                          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-150/40">
+                            <div>
+                              <div className="text-xs font-extrabold text-slate-900">Make status Publically Available</div>
+                              <div className="text-[10px] text-slate-500">Draft blocks are exclusively viewable in this Admin dashboard</div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={cmsTab === 'pages' ? pageForm.published : postForm.published}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  if (cmsTab === 'pages') {
+                                    setPageForm({ ...pageForm, published: checked });
+                                  } else {
+                                    setPostForm({ ...postForm, published: checked });
+                                  }
+                                }}
+                                className="sr-only peer"
+                              />
+                              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Guide & live layout preview Column (5 cols) */}
+                        <div className="lg:col-span-5 p-6 border-t lg:border-t-0 lg:border-l border-slate-100 bg-slate-50/70 overflow-y-auto space-y-6">
+                          {/* Rich Formatting Cheat Card */}
+                          <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-purple-200 p-5 rounded-2xl shadow-md space-y-3">
+                            <h4 className="text-xs font-black uppercase text-white tracking-wider flex items-center gap-1.5">
+                              <Settings size={14} className="text-orange-400" />
+                              Markdown Syntax Guide
+                            </h4>
+                            <div className="text-[11px] space-y-2 leading-relaxed">
+                              <div><code className="text-yellow-300 font-bold font-mono px-1"># Title</code> <span className="opacity-80">Primary header title layout.</span></div>
+                              <div><code className="text-yellow-300 font-bold font-mono px-1">## Subtitle</code> <span className="opacity-80">Secondary section dividers.</span></div>
+                              <div><code className="text-yellow-300 font-bold font-mono px-1">**Bold**</code> <span className="opacity-80">To highlight critical terms.</span></div>
+                              <div><code className="text-yellow-300 font-bold font-mono px-1">- Item</code> <span className="opacity-80">Add clean dotted unordered lists.</span></div>
+                              <div><code className="text-yellow-300 font-bold font-mono px-1">&gt; Quote</code> <span className="opacity-80">Styled blockquotes for editorial statements.</span></div>
+                            </div>
+                          </div>
+
+                          {/* Live Parser Preview */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Parsed Live Preview</label>
+                            <div className="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm max-h-[300px] overflow-y-auto no-scrollbar prose prose-slate">
+                              <h3 className="text-sm font-bold text-slate-900 leading-tight mb-2 border-b border-slate-100 pb-1.5 opacity-40 uppercase tracking-widest font-mono">Live Visual Render</h3>
+                              <div className="markdown-body text-xs leading-relaxed space-y-2">
+                                <h1 className="text-xl font-bold text-slate-900">{cmsTab === 'pages' ? pageForm.title || 'Untitled Static Page' : postForm.title || 'Untitled Blog Post'}</h1>
+                                {cmsTab === 'blog' && (
+                                  <div className="text-[10px] text-slate-400 font-mono mb-2">Author: {postForm.authorName || 'Anonymous'} | Cat: {postForm.category}</div>
+                                )}
+                                <div className="text-xs text-slate-700 font-medium">
+                                  {cmsTab === 'pages' ? (
+                                    pageForm.content ? (
+                                      <div className="text-slate-650 opacity-90 prose text-xs">
+                                        <div className="border-l-2 border-slate-200 pl-2 text-slate-500 font-mono text-[10px] my-1">Parsed markdown display below:</div>
+                                        <div className="text-xs text-slate-650 leading-relaxed font-normal whitespace-pre-line border border-slate-100 p-3 rounded-lg bg-slate-50">
+                                          {cmsTab === 'pages' ? pageForm.content.slice(0, 500) : postForm.content.slice(0, 500)}
+                                          {(cmsTab === 'pages' ? pageForm.content.length : postForm.content.length) > 500 && ' ... [truncated inside editor]'}
+                                        </div>
+                                      </div>
+                                    ) : 'No raw markdown contents logged ...'
+                                  ) : (
+                                    postForm.content ? (
+                                      <div className="text-slate-650 opacity-90 prose text-xs">
+                                        <div className="border-l-2 border-slate-200 pl-2 text-slate-500 font-mono text-[10px] my-1">Parsed markdown display below:</div>
+                                        <div className="text-xs text-slate-650 leading-relaxed font-normal whitespace-pre-line border border-slate-100 p-3 rounded-lg bg-slate-50">
+                                          {postForm.content.slice(0, 500)}
+                                          {postForm.content.length > 500 && ' ... [truncated inside editor]'}
+                                        </div>
+                                      </div>
+                                    ) : 'No raw markdown contents logged ...'
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer Actions bar */}
+                      <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-3xl">
+                        <button
+                          type="button"
+                          onClick={() => { setShowCmsModal(false); setEditingPage(null); setEditingPost(null); }}
+                          className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={cmsLoading}
+                          className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white rounded-xl font-bold text-xs transition-colors shadow-lg shadow-orange-500/15"
+                        >
+                          {cmsLoading ? 'Saving changes...' : 'Save Draft Settings'}
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

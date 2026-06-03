@@ -171,9 +171,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="flex items-center justify-between px-2 sm:px-6 py-2 sm:py-3 gap-1 sm:gap-8 h-14 sm:h-[72px]">
                 
                 {/* Logo */}
-                <Link to="/" className="flex-shrink-0 hover:opacity-80 transition-opacity">
-                    <Logo />
-                </Link>
+                <div className="flex items-center gap-4 sm:gap-6 flex-shrink-0">
+                    <Link to="/" className="hover:opacity-80 transition-opacity">
+                        <Logo />
+                    </Link>
+                    <Link to="/blog" className="hidden border border-purple-100 bg-white/70 hover:bg-white text-slate-700 hover:text-brand-600 font-extrabold text-xs tracking-wide rounded-xl px-3.5 py-2 hover:shadow-sm sm:flex gap-1.5 items-center transition-all">
+                        <span>Blog Chronicles</span>
+                    </Link>
+                </div>
 
                 {/* Search - Centered */}
                 <div className="hidden md:block flex-1 max-w-3xl">
@@ -227,10 +232,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <>
                       <Link 
                           to="/signin" 
-                          className="flex items-center gap-2 font-bold text-sm bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-purple-500/10 active:scale-98"
+                          className="flex items-center justify-center gap-1.5 font-bold text-xs sm:text-sm bg-purple-600 hover:bg-purple-700 text-white p-2.5 sm:px-4 sm:py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/15 hover:shadow-purple-500/25 hover:scale-105 active:scale-95 flex-shrink-0"
+                          title="Sign In / Join"
                       >
-                          <Icon name="user" size={16} />
-                          <span>Sign In / Join</span>
+                          <Icon name="user" size={18} className="w-[18px] h-[18px]" />
+                          <span className="hidden sm:inline">Sign In / Join</span>
                       </Link>
                     </>
                     )}
@@ -256,11 +262,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <footer className="bg-brand-950 text-purple-100 py-6 mt-0 relative z-10">
         <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6 md:gap-4">
           
-          {/* Brand Only (Copyright Removed) */}
-          <div className="flex flex-col md:flex-row items-center gap-2 md:gap-8">
+          {/* Brand & CMS Links */}
+          <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
             <Link to="/" className="scale-90 opacity-90 grayscale brightness-200 hover:opacity-100 transition-all duration-300">
                 <Logo />
             </Link>
+            <div className="flex flex-wrap justify-center items-center gap-4 text-xs font-semibold text-purple-200">
+              <Link to="/info/about-us" className="hover:text-white transition-colors">About Us</Link>
+              <span>•</span>
+              <Link to="/info/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+              <span>•</span>
+              <Link to="/info/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+              <span>•</span>
+              <Link to="/blog" className="hover:text-white transition-colors">Blog Chronicles</Link>
+            </div>
           </div>
 
           {/* Contact & Socials */}

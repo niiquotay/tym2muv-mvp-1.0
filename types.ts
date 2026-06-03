@@ -186,3 +186,31 @@ export interface Review {
   comment?: string;
   createdAt: string;
 }
+
+export interface StaticPage {
+  id: string;
+  slug: string;
+  title: string;
+  content: string;
+  published: boolean;
+  metaTitle?: string;
+  metaDescription?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  published: boolean;
+  coverImage?: string;
+  authorName: string;
+  category: string;
+  readTime?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+

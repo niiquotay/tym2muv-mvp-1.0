@@ -25,6 +25,9 @@ const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
+const StaticCMSPage = lazy(() => import('./pages/StaticCMSPage'));
+const BlogPostList = lazy(() => import('./pages/BlogPostList'));
+const BlogPostDetails = lazy(() => import('./pages/BlogPostDetails'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const PageLoader = () => (
@@ -203,6 +206,9 @@ const App: React.FC = () => {
                       <AgentDashboard />
                     </ProtectedRoute>
                   } />
+                  <Route path="/info/:slug" element={<StaticCMSPage />} />
+                  <Route path="/blog" element={<BlogPostList />} />
+                  <Route path="/blog/:slug" element={<BlogPostDetails />} />
                   
                   <Route path="*" element={<NotFound />} />
                 </Routes>

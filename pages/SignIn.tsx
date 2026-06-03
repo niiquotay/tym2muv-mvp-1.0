@@ -17,6 +17,7 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
   const [isLoading, setIsLoading] = React.useState(false);
   const [isSignUp, setIsSignUp] = React.useState(defaultTab === 'signup' || location.pathname === '/signup');
   const [selectedRole, setSelectedRole] = React.useState<'Tenant' | 'Agent'>('Tenant');
+  const [agreedToTerms, setAgreedToTerms] = React.useState(false);
 
   React.useEffect(() => {
     setIsSignUp(defaultTab === 'signup' || location.pathname === '/signup');
@@ -123,38 +124,61 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
               </button>
             </div>
 
-            {/* Futuristic Larger Social Authentication Buttons with logos only */}
-            <div className="flex justify-center items-center gap-8 pt-4 pb-2">
-              {/* Google Authentication Port */}
-              <button
-                id="auth-google-btn"
-                type="button"
-                onClick={handleGoogleAuth}
-                disabled={isLoading}
-                title={isSignUp ? 'Sign up with Google' : 'Sign in with Google'}
-                className="w-28 h-28 flex items-center justify-center bg-white border border-purple-100 hover:border-brand-500/40 rounded-[2rem] transition-all duration-300 shadow-[0_10px_40px_rgba(147,51,234,0.08)] hover:shadow-[0_16px_50px_rgba(147,51,234,0.18)] hover:scale-105 active:scale-95 disabled:opacity-50 group"
-              >
-                <svg className="w-14 h-14 transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24">
-                  <path fill="#EA4335" d="M12 5.04c1.62 0 3.08.56 4.22 1.66l3.15-3.15C17.43 1.74 14.93 1 12 1 7.22 1 3.19 3.73 1.25 7.73l3.8 2.95C5.97 7.15 8.73 5.04 12 5.04z" />
-                  <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.21-2.38H12v4.51h6.44c-.28 1.48-1.12 2.73-2.38 3.58l3.7 2.87c2.16-2 3.43-4.94 3.43-8.58z" />
-                  <path fill="#FBBC05" d="M5.05 14.68c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28L1.25 7.17C.45 8.78 0 10.59 0 12.5s.45 3.72 1.25 5.33l3.8-3.15z" />
-                  <path fill="#34A853" d="M12 23c3.24 0 5.95-1.08 7.93-2.91l-3.7-2.87c-1.03.69-2.34 1.1-4.23 1.1-3.27 0-6.03-2.11-7.02-5.18l-3.8 2.95C3.19 20.27 7.22 23 12 23z" />
-                </svg>
-              </button>
+            {isSignUp && (
+              <div id="terms-checkbox-container" className="flex items-start gap-3 bg-brand-50/40 border border-brand-100/50 p-4 rounded-2xl animate-fade-in transition-all">
+                <input
+                  id="signup-agree-checkbox"
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-brand-200 text-brand-600 focus:ring-brand-500 hover:border-brand-400 accent-brand-600 cursor-pointer"
+                />
+                <label id="signup-agree-label" htmlFor="signup-agree-checkbox" className="text-xs text-slate-700 font-semibold cursor-pointer leading-relaxed select-none">
+                  I consent to CaliberDesk's secure profile registration and agree to the <Link to="/info/terms" className="text-brand-600 hover:underline font-bold" target="_blank">Terms of Service</Link> and <Link to="/info/privacy" className="text-brand-600 hover:underline font-bold" target="_blank">Privacy Policy</Link>.
+                </label>
+              </div>
+            )}
 
-              {/* LinkedIn Authentication Port */}
-              <button
-                id="auth-linkedin-btn"
-                type="button"
-                onClick={handleLinkedInAuth}
-                disabled={isLoading}
-                title={isSignUp ? 'Sign up with LinkedIn' : 'Sign in with LinkedIn'}
-                className="w-28 h-28 flex items-center justify-center bg-[#0A66C2] hover:bg-[#004182] border border-transparent rounded-[2rem] transition-all duration-300 shadow-[0_10px_40px_rgba(10,102,194,0.22)] hover:shadow-[0_16px_50px_rgba(10,102,194,0.35)] hover:scale-105 active:scale-95 disabled:opacity-50 group"
-              >
-                <svg className="w-14 h-14 fill-current text-white transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24">
-                  <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
-                </svg>
-              </button>
+            {/* Futuristic Larger Social Authentication Buttons with logos only */}
+            <div className="flex flex-col items-center gap-4">
+              <div className="flex justify-center items-center gap-8 pt-2 pb-2">
+                {/* Google Authentication Port */}
+                <button
+                  id="auth-google-btn"
+                  type="button"
+                  onClick={handleGoogleAuth}
+                  disabled={isLoading || (isSignUp && !agreedToTerms)}
+                  title={isSignUp ? 'Sign up with Google (Requires Consent)' : 'Sign in with Google'}
+                  className="w-28 h-28 flex items-center justify-center bg-white border border-purple-100 hover:border-brand-500/40 rounded-[2rem] transition-all duration-300 shadow-[0_10px_40px_rgba(147,51,234,0.08)] hover:shadow-[0_16px_50px_rgba(147,51,234,0.18)] hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 disabled:shadow-none group"
+                >
+                  <svg className="w-14 h-14 transition-transform duration-300 group-hover:scale-110 group-disabled:scale-100" viewBox="0 0 24 24">
+                    <path fill="#EA4335" d="M12 5.04c1.62 0 3.08.56 4.22 1.66l3.15-3.15C17.43 1.74 14.93 1 12 1 7.22 1 3.19 3.73 1.25 7.73l3.8 2.95C5.97 7.15 8.73 5.04 12 5.04z" />
+                    <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.21-2.38H12v4.51h6.44c-.28 1.48-1.12 2.73-2.38 3.58l3.7 2.87c2.16-2 3.43-4.94 3.43-8.58z" />
+                    <path fill="#FBBC05" d="M5.05 14.68c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28L1.25 7.17C.45 8.78 0 10.59 0 12.5s.45 3.72 1.25 5.33l3.8-3.15z" />
+                    <path fill="#34A853" d="M12 23c3.24 0 5.95-1.08 7.93-2.91l-3.7-2.87c-1.03.69-2.34 1.1-4.23 1.1-3.27 0-6.03-2.11-7.02-5.18l-3.8 2.95C3.19 20.27 7.22 23 12 23z" />
+                  </svg>
+                </button>
+
+                {/* LinkedIn Authentication Port */}
+                <button
+                  id="auth-linkedin-btn"
+                  type="button"
+                  onClick={handleLinkedInAuth}
+                  disabled={isLoading || (isSignUp && !agreedToTerms)}
+                  title={isSignUp ? 'Sign up with LinkedIn (Requires Consent)' : 'Sign in with LinkedIn'}
+                  className="w-28 h-28 flex items-center justify-center bg-[#0A66C2] hover:bg-[#004182] border border-transparent rounded-[2rem] transition-all duration-300 shadow-[0_10px_40px_rgba(10,102,194,0.22)] hover:shadow-[0_16px_50px_rgba(10,102,194,0.35)] hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 disabled:shadow-none group"
+                >
+                  <svg className="w-14 h-14 fill-current text-white transition-transform duration-300 group-hover:scale-110 group-disabled:scale-100" viewBox="0 0 24 24">
+                    <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
+                  </svg>
+                </button>
+              </div>
+
+              {isSignUp && !agreedToTerms && (
+                <p id="consent-warning-msg" className="text-center text-[10px] font-mono text-purple-650 font-bold tracking-wider animate-pulse mt-1">
+                  ⚡ PLEASE ACCEPT REGISTRATION CONSENT TO OPEN GATEWAY
+                </p>
+              )}
             </div>
 
             <div className="pt-6 text-center">
