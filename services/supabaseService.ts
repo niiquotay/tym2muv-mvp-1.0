@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
-import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review, Payment, ViewRequest, StaticPage, BlogPost } from '../types';
+import { Listing, User, Chat, ChatMessage, SearchFilters, Monetization, Review, Payment, ViewRequest, StaticPage, BlogPost, RentFinancingApplication } from '../types';
 import { withCache, delCache, invalidateCachePrefix, CACHE_TTL, cacheKey } from './cacheService';
 import { uploadImageToCloudinary } from './imageService';
 import { MOCK_LISTINGS, MOCK_USERS, MOCK_ADS, MOCK_CHATS } from './mockData';
@@ -1320,5 +1320,144 @@ export const deleteBlogPost = async (id: string): Promise<void> => {
   const filtered = posts.filter(b => b.id !== id);
   saveLocalPosts(filtered);
 };
+
+// --- RENT FINANCING SERVICES ---
+const getLocalApplications = (): RentFinancingApplication[] => {
+  const data = localStorage.getItem('caliber_rent_financing_applications');
+  if (!data) return [];
+  try {
+    return JSON.parse(data);
+  } catch (e) {
+    return [];
+  }
+};
+
+const saveLocalApplications = (apps: RentFinancingApplication[]): void => {
+  localStorage.setItem('caliber_rent_financing_applications', JSON.stringify(apps));
+};
+
+export const submitRentFinancingApplication = async (app: Omit<RentFinancingApplication, 'id' | 'createdAt' | 'status'>): Promise<RentFinancingApplication> => {
+  const newApp: RentFinancingApplication = {
+    ...app,
+    id: `app-${Date.now()}`,
+    status: 'pending',
+    createdAt: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.from('rent_financing_applications').insert({
+        user_id: newApp.userId,
+        full_name: newApp.fullName,
+        email: newApp.email,
+        phone: newApp.phone,
+        employment_status: newApp.employmentStatus,
+        monthly_income: newApp.monthlyIncome,
+        id_type: newApp.idType,
+        id_number: newApp.idNumber,
+        monthly_rent: newApp.monthlyRent,
+        landlord_name: newApp.landlordName,
+        landlord_phone: newApp.landlordPhone,
+        move_in_date: newApp.moveInDate,
+        lease_duration: newApp.leaseDuration,
+        street_address: newApp.streetAddress,
+        city: newApp.city,
+        state_region: newApp.stateRegion,
+        country: newApp.country,
+        postal_code: newApp.postalCode,
+        amount_required: newApp.amountRequired,
+        repayment_duration: newApp.repaymentDuration,
+        status: newApp.status,
+        created_at: newApp.createdAt
+      }).select().single();
+
+      if (error) throw error;
+      if (data) {
+        return {
+          id: data.id,
+          userId: data.user_id,
+          fullName: data.full_name,
+          email: data.email,
+          phone: data.phone,
+          employmentStatus: data.employment_status,
+          monthlyIncome: Number(data.monthly_income),
+          idType: data.id_type,
+          idNumber: data.id_number,
+          monthlyRent: Number(data.monthly_rent),
+          landlordName: data.landlord_name,
+          landlordPhone: data.landlord_phone,
+          moveInDate: data.move_in_date,
+          leaseDuration: Number(data.lease_duration),
+          streetAddress: data.street_address,
+          city: data.city,
+          stateRegion: data.state_region,
+          country: data.country,
+          postalCode: data.postal_code,
+          amountRequired: Number(data.amount_required),
+          repaymentDuration: Number(data.repayment_duration),
+          status: data.status,
+          createdAt: data.created_at
+        };
+      }
+    } catch (e) {
+      console.warn('Fallback to local rent financing submission', e);
+    }
+  }
+
+  const apps = getLocalApplications();
+  apps.unshift(newApp);
+  saveLocalApplications(apps);
+  return newApp;
+};
+
+export const getRentFinancingApplications = async (userId?: string): Promise<RentFinancingApplication[]> => {
+  if (isSupabaseConfigured && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('rent_financing_applications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        return data.map((d: any) => ({
+          id: d.id,
+          userId: d.user_id,
+          fullName: d.full_name,
+          email: d.email,
+          phone: d.phone,
+          employmentStatus: d.employment_status,
+          monthlyIncome: Number(d.monthly_income),
+          idType: d.id_type,
+          idNumber: d.id_number,
+          monthlyRent: Number(d.monthly_rent),
+          landlordName: d.landlord_name,
+          landlordPhone: d.landlord_phone,
+          moveInDate: d.move_in_date,
+          leaseDuration: Number(d.lease_duration),
+          streetAddress: d.street_address,
+          city: d.city,
+          stateRegion: d.state_region,
+          country: d.country,
+          postalCode: d.postal_code,
+          amountRequired: Number(d.amount_required),
+          repaymentDuration: Number(d.repayment_duration),
+          status: d.status,
+          createdAt: d.created_at
+        }));
+      }
+    } catch (e) {
+      console.warn('Fallback to local rent financing list', e);
+    }
+  }
+
+  const apps = getLocalApplications();
+  if (userId) {
+    return apps.filter(a => a.userId === userId || a.email === userId);
+  }
+  return apps;
+};
+
 
 

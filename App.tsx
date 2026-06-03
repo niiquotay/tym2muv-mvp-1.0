@@ -26,8 +26,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const StaticCMSPage = lazy(() => import('./pages/StaticCMSPage'));
-const BlogPostList = lazy(() => import('./pages/BlogPostList'));
-const BlogPostDetails = lazy(() => import('./pages/BlogPostDetails'));
+const RentFinancing = lazy(() => import('./pages/RentFinancing'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const PageLoader = () => (
@@ -191,6 +190,11 @@ const App: React.FC = () => {
                       <SavedListings />
                     </ProtectedRoute>
                   } />
+                  <Route path="/rent-financing" element={
+                    <ProtectedRoute>
+                      <RentFinancing />
+                    </ProtectedRoute>
+                  } />
                   <Route path="/settings" element={
                     <ProtectedRoute>
                       <Settings />
@@ -207,8 +211,6 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                   } />
                   <Route path="/info/:slug" element={<StaticCMSPage />} />
-                  <Route path="/blog" element={<BlogPostList />} />
-                  <Route path="/blog/:slug" element={<BlogPostDetails />} />
                   
                   <Route path="*" element={<NotFound />} />
                 </Routes>

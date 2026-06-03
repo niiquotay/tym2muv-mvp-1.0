@@ -15,24 +15,15 @@ const CountrySelector: React.FC = () => {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 sm:gap-2 px-1 rounded-xl transition-all group active:scale-95"
+        className="relative w-9 h-9 rounded-xl flex items-center justify-center border border-slate-200/50 bg-white/80 hover:bg-white text-slate-700 hover:border-slate-300 transition-all shadow-sm active:scale-95 cursor-pointer flex-shrink-0 group"
       >
-        <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center">
-          {/* 5D Flag Effect: Multiple layers of shadows and depth */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-black/20 rounded-lg sm:rounded-xl blur-[1px] transform -rotate-3 scale-105"></div>
-          <div className="absolute inset-0 bg-brand-500/10 rounded-lg sm:rounded-xl blur-md group-hover:blur-lg transition-all"></div>
-          
-          <div className="relative z-10 w-6 h-4 sm:w-8 sm:h-6 overflow-hidden rounded shadow-[0_4px_8px_rgba(0,0,0,0.3)] transform group-hover:scale-110 group-hover:-translate-y-1 group-hover:rotate-3 transition-all duration-500 ease-out select-none border border-white/20">
-            <img 
-              src={currentCountry.flagUrl} 
-              alt={currentCountry.name}
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          
-          {/* Glass Overlay for 5D feel */}
-          <div className="absolute inset-0 rounded-lg sm:rounded-xl border border-white/40 bg-gradient-to-tr from-white/10 via-transparent to-white/30 pointer-events-none"></div>
+        <div className="relative w-6 h-4 overflow-hidden rounded shadow-[0_2px_4px_rgba(0,0,0,0.15)] transform group-hover:scale-110 transition-all duration-300 ease-out select-none border border-white/20">
+          <img 
+            src={currentCountry.flagUrl} 
+            alt={currentCountry.name}
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+          />
         </div>
       </button>
 

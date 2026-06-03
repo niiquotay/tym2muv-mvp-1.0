@@ -957,27 +957,17 @@ const AdminDashboard: React.FC = () => {
             >
               {/* CMS Tab Bar Header */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm gap-4">
-                <div className="flex bg-slate-100 p-1.5 rounded-xl gap-1">
-                  <button
-                    onClick={() => setCmsTab('pages')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${cmsTab === 'pages' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
-                  >
-                    Static Pages
-                  </button>
-                  <button
-                    onClick={() => setCmsTab('blog')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${cmsTab === 'blog' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
-                  >
-                    Blog Posts
-                  </button>
+                <div>
+                  <h4 className="font-bold text-slate-800 text-sm">Static Page Management</h4>
+                  <p className="text-[10px] text-slate-450 font-medium">Build, edit and publish static content pages</p>
                 </div>
                 
                 <button
-                  onClick={cmsTab === 'pages' ? handleOpenPageCreate : handleOpenPostCreate}
+                  onClick={handleOpenPageCreate}
                   className="flex items-center gap-1.5 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shadow-orange-500/10"
                 >
                   <Plus size={16} />
-                  <span>Create {cmsTab === 'pages' ? 'Static Page' : 'Blog Article'}</span>
+                  <span>Create Static Page</span>
                 </button>
               </div>
 

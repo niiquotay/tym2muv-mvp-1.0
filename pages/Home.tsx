@@ -381,6 +381,41 @@ const Home: React.FC = () => {
             </div>
           </section>
 
+          {/* Luxury Rent Financing Banner */}
+          <section className="mt-1 animate-slide-up">
+            <div className="relative overflow-hidden rounded-[2.2rem] bg-gradient-to-br from-indigo-900 via-indigo-950 to-emerald-950 text-white p-6 sm:p-10 border border-emerald-500/10 shadow-lg">
+              {/* Background accent designs */}
+              <div className="absolute top-0 right-0 w-[240px] h-[240px] bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+              <div className="absolute bottom-0 left-0 w-[180px] h-[180px] bg-indigo-500/10 rounded-full blur-[60px] pointer-events-none"></div>
+
+              <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div className="max-w-2xl space-y-3">
+                  <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold tracking-wider uppercase">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    CaliberRent Finance Program
+                  </span>
+                  <h2 className="text-xl sm:text-3xl font-black font-display tracking-tight text-white leading-tight">
+                    Struggling with <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-indigo-200">Huge Landlord Advances</span>?
+                  </h2>
+                  <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
+                    Zero worry. CaliberDesk will finance your rent directly and immediately. Secure the space you love today, and pay us back in stress-free monthly tiers over up to <strong>36 months</strong>.
+                  </p>
+                </div>
+
+                <div className="w-full md:w-auto flex-shrink-0">
+                  <Link
+                    id="apply-financing-home-banner-btn"
+                    to="/rent-financing"
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 font-extrabold text-xs sm:text-sm text-slate-950 px-6 py-4 rounded-2xl shadow-xl shadow-emerald-500/15 duration-300 transition-all hover:scale-[1.03] active:scale-97 w-full sm:w-auto"
+                  >
+                    <span>Calculate & Apply Now</span>
+                    <Icon name="chevronRight" size={16} />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Trending Listings */}
           <section id="trending-section">
             <div className="glass-card rounded-[2rem] p-6 md:p-8 shadow-sm">

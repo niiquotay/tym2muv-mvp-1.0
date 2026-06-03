@@ -214,3 +214,39 @@ export interface BlogPost {
   updatedAt: string;
 }
 
+export interface RentFinancingApplication {
+  id: string;
+  userId?: string;
+  
+  // Personal Information
+  fullName: string;
+  email: string;
+  phone: string;
+  employmentStatus: string;
+  monthlyIncome: number;
+  idType: string;
+  idNumber: string;
+
+  // Rent Details
+  monthlyRent: number;
+  landlordName: string;
+  landlordPhone: string;
+  moveInDate: string;
+  leaseDuration: number;
+
+  // Property Address
+  streetAddress: string;
+  city: string;
+  stateRegion: string;
+  country: string;
+  postalCode?: string;
+
+  // Loan Details
+  amountRequired: number;
+  repaymentDuration: number; // max 36 months
+
+  status: 'pending' | 'approved' | 'rejected' | 'under_review';
+  createdAt: string;
+}
+
+
