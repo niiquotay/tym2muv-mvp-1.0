@@ -202,13 +202,96 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
   
   try {
     return await withCache(cacheKey('profile', userId), async () => {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
         
-      if (error || !data) return null;
+      if (!data) {
+        console.log("No profile found for authenticated user in database. Initiating dynamic client-side profile creation.");
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser && authUser.id === userId) {
+          const fullName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Unknown';
+          const avatarUrl = authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`;
+          
+          const storedRole = localStorage.getItem('oauth_selected_role') || 'Tenant';
+          const rawRole = (authUser.user_metadata?.role || storedRole).toLowerCase();
+
+          // Standard database roles configurations we might need to match
+          const rolesToTry = [rawRole, 'tenant', 'user', 'agent'];
+          let insertSuccess = false;
+          let insertError: any = null;
+
+          for (const roleValue of rolesToTry) {
+            try {
+              const newProfile = {
+                id: userId,
+                full_name: fullName,
+                avatar_url: avatarUrl,
+                role: roleValue as any
+              };
+
+              const insertResult = await supabase
+                .from('profiles')
+                .insert(newProfile)
+                .select('*')
+                .maybeSingle();
+
+              if (!insertResult.error && insertResult.data) {
+                data = insertResult.data;
+                insertSuccess = true;
+                console.log(`Successfully auto-created missing user profile with role: ${roleValue}`);
+                break;
+              } else if (insertResult.error) {
+                insertError = insertResult.error;
+              }
+            } catch (err) {
+              insertError = err;
+            }
+          }
+
+          if (!insertSuccess) {
+            console.log("Fallback insertion by leaving the role column completely database-default.");
+            try {
+              const insertResult = await supabase
+                .from('profiles')
+                .insert({
+                  id: userId,
+                  full_name: fullName,
+                  avatar_url: avatarUrl
+                })
+                .select('*')
+                .maybeSingle();
+
+              if (!insertResult.error && insertResult.data) {
+                data = insertResult.data;
+                insertSuccess = true;
+                console.log("Successfully auto-created user profile with database default role.");
+              } else {
+                insertError = insertResult.error || insertError;
+              }
+            } catch (err) {
+              insertError = err;
+            }
+          }
+
+          if (insertSuccess && data) {
+            // If the role is agent / Agent, make sure to try inserting into the 'agents' table if present in their schema
+            if (data.role === 'agent' || data.role === 'Agent') {
+              try {
+                await supabase.from('agents').insert({ id: userId, company_name: '' });
+              } catch (_) {
+                // Table might not exist or already present, safe to ignore
+              }
+            }
+          } else {
+            console.error("Failed to auto-create user profile on-the-fly dynamically:", insertError);
+          }
+        }
+      }
+        
+      if (!data) return null;
       
       const savedQuery = await supabase.from('saved_listings').select('listing_id').eq('user_id', userId);
       data.savedListings = (savedQuery.data || []).map(r => r.listing_id);

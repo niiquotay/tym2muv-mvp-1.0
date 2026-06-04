@@ -209,14 +209,14 @@ BEGIN
   INSERT INTO public.profiles (id, full_name, avatar_url, role)
   VALUES (
       NEW.id, 
-      NEW.raw_user_meta_data->>'full_name', 
-      NEW.raw_user_meta_data->>'avatar_url',
+      COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', NEW.raw_user_meta_data->>'email', 'Unknown'), 
+      COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture'),
       COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'tenant')
   );
   -- If role is agent, insert into agents table
   IF NEW.raw_user_meta_data->>'role' = 'agent' THEN
       INSERT INTO public.agents (id, company_name)
-      VALUES (NEW.id, NEW.raw_user_meta_data->>'company_name');
+      VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'company_name', ''));
   END IF;
   RETURN NEW;
 END;
